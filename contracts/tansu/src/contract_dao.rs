@@ -3,7 +3,7 @@
 use crate::{
     DaoTrait, MembershipTrait, Tansu, TansuArgs, TansuClient, TansuTrait, errors, events, types,
 };
-use soroban_sdk::crypto::bls12_381::{Fr, G1Affine};
+use soroban_sdk::crypto::bls12_381::{Bls12381Fr, Bls12381G1Affine};
 use soroban_sdk::{
     Address, Bytes, BytesN, Env, InvokeError, String, U256, Vec, contractimpl, panic_with_error,
     token, vec,
@@ -127,8 +127,8 @@ impl DaoTrait for Tansu {
         let vote_config = Self::get_anonymous_voting_config(env.clone(), project_key);
 
         let bls12_381 = env.crypto().bls12_381();
-        let seed_generator_point = G1Affine::from_bytes(vote_config.seed_generator_point);
-        let vote_generator_point = G1Affine::from_bytes(vote_config.vote_generator_point);
+        let seed_generator_point = Bls12381G1Affine::from_bytes(vote_config.seed_generator_point);
+        let vote_generator_point = Bls12381G1Affine::from_bytes(vote_config.vote_generator_point);
 
         let mut commitments = Vec::new(&env);
         for (vote_, seed_) in votes.iter().zip(seeds.iter()) {
@@ -322,7 +322,7 @@ impl DaoTrait for Tansu {
                 .expect("anonymous commitments missing")
                 .iter()
             {
-                let point = G1Affine::from_bytes(commitment);
+                let point = Bls12381G1Affine::from_bytes(commitment);
                 aggregate.push_back(
                     bls12_381
                         .g1_mul(&point, &zero_weight.clone().into())
@@ -433,7 +433,7 @@ impl DaoTrait for Tansu {
             ) => {
                 let bls12_381 = env.crypto().bls12_381();
                 let zero = U256::from_u32(&env, 0);
-                let neg_weight: Fr = bls12_381.fr_sub(
+                let neg_weight: Bls12381Fr = bls12_381.fr_sub(
                     &zero.into(),
                     &U256::from_u32(&env, vote_choice.weight).into(),
                 );
@@ -441,8 +441,8 @@ impl DaoTrait for Tansu {
                     let current = aggregate
                         .get(idx as u32)
                         .expect("missing aggregate commitment");
-                    let current = G1Affine::from_bytes(current);
-                    let commitment = G1Affine::from_bytes(commitment);
+                    let current = Bls12381G1Affine::from_bytes(current);
+                    let commitment = Bls12381G1Affine::from_bytes(commitment);
                     let neg_weighted = bls12_381.g1_mul(&commitment, &neg_weight);
                     let updated = bls12_381.g1_add(&current, &neg_weighted);
                     aggregate.set(idx as u32, updated.to_bytes());
@@ -609,7 +609,7 @@ impl DaoTrait for Tansu {
                 panic_with_error!(&env, &errors::ContractErrors::BadCommitment)
             }
             for commitment in &vote_choice.commitments {
-                G1Affine::from_bytes(commitment);
+                Bls12381G1Affine::from_bytes(commitment);
             }
         }
 
@@ -914,7 +914,8 @@ impl DaoTrait for Tansu {
         // tally commitments from recorded votes (vote + seed)
         let mut g1_identity = [0u8; 96];
         g1_identity[0] = 0x40;
-        let tally_commitment_init_ = G1Affine::from_bytes(BytesN::from_array(&env, &g1_identity));
+        let tally_commitment_init_ =
+            Bls12381G1Affine::from_bytes(BytesN::from_array(&env, &g1_identity));
 
         let mut tally_commitments = [
             tally_commitment_init_.clone(),
@@ -931,7 +932,7 @@ impl DaoTrait for Tansu {
                     .iter()
                     .zip(tally_commitments.iter_mut())
                 {
-                    let commitment_ = G1Affine::from_bytes(commitment);
+                    let commitment_ = Bls12381G1Affine::from_bytes(commitment);
                     // scale the commitment by the voter weight: weight * (g*v + h*r).
                     let weighted_commitment =
                         bls12_381.g1_mul(&commitment_, &weight_.clone().into());
@@ -1199,8 +1200,8 @@ fn update_proposal_tallies(env: &Env, tallies: &mut types::VoteTallies, vote: &t
                 let current = aggregate
                     .get(idx as u32)
                     .expect("missing aggregate commitment");
-                let current = G1Affine::from_bytes(current);
-                let commitment = G1Affine::from_bytes(commitment);
+                let current = Bls12381G1Affine::from_bytes(current);
+                let commitment = Bls12381G1Affine::from_bytes(commitment);
                 let weighted_commitment = bls12_381.g1_mul(&commitment, &weight.clone().into());
                 let updated = bls12_381.g1_add(&current, &weighted_commitment);
                 aggregate.set(idx as u32, updated.to_bytes());
@@ -1222,7 +1223,7 @@ fn update_proposal_tallies(env: &Env, tallies: &mut types::VoteTallies, vote: &t
 /// * `seeds` - Decoded seed values [approve, reject, abstain]
 ///
 /// # Returns
-/// * `Vec<G1Affine>` - Computed commitment points used for verification
+/// * `Vec<Bls12381G1Affine>` - Computed commitment points used for verification
 ///
 /// # Panics
 /// * If no anonymous voting configuration exists for the project
@@ -1231,11 +1232,11 @@ fn commitment_checks_from_tallies_and_seeds(
     project_key: &Bytes,
     tallies: &Vec<u128>,
     seeds: &Vec<u128>,
-) -> Vec<G1Affine> {
+) -> Vec<Bls12381G1Affine> {
     let vote_config = Tansu::get_anonymous_voting_config(env.clone(), project_key.clone());
     let bls12_381 = env.crypto().bls12_381();
-    let seed_generator_point = G1Affine::from_bytes(vote_config.seed_generator_point);
-    let vote_generator_point = G1Affine::from_bytes(vote_config.vote_generator_point);
+    let seed_generator_point = Bls12381G1Affine::from_bytes(vote_config.seed_generator_point);
+    let vote_generator_point = Bls12381G1Affine::from_bytes(vote_config.vote_generator_point);
     let mut commitment_checks = Vec::new(env);
     for (tally_, seed_) in tallies.iter().zip(seeds.iter()) {
         let seed_: U256 = U256::from_u128(env, seed_);
@@ -1288,7 +1289,7 @@ fn proof_from_aggregates(
 
     for (commitment_check, aggregate) in commitment_checks.iter().zip(aggregate_commitments.iter())
     {
-        if commitment_check != G1Affine::from_bytes(aggregate) {
+        if commitment_check != Bls12381G1Affine::from_bytes(aggregate) {
             return false;
         }
     }

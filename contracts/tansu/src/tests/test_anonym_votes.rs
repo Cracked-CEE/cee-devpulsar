@@ -1,5 +1,5 @@
 use core::ops::Add;
-use soroban_sdk::crypto::bls12_381::{Fr, G1Affine};
+use soroban_sdk::crypto::bls12_381::{Bls12381Fr, Bls12381G1Affine};
 use soroban_sdk::{Bytes, Env, U256, bytesn, vec};
 
 use super::test_utils::{create_test_data, init_contract};
@@ -8,11 +8,11 @@ fn commitment(
     env: &Env,
     vote: &u128,
     seed: &u128,
-    vote_generator_point: &G1Affine,
-    seed_generator_point: &G1Affine,
-) -> G1Affine {
-    let vote_fr = Fr::from_u256(U256::from_u128(env, *vote).clone());
-    let seed_fr = Fr::from_u256(U256::from_u128(env, *seed).clone());
+    vote_generator_point: &Bls12381G1Affine,
+    seed_generator_point: &Bls12381G1Affine,
+) -> Bls12381G1Affine {
+    let vote_fr = Bls12381Fr::from_u256(U256::from_u128(env, *vote).clone());
+    let seed_fr = Bls12381Fr::from_u256(U256::from_u128(env, *seed).clone());
 
     let bls12_381 = env.crypto().bls12_381();
 
@@ -23,7 +23,7 @@ fn commitment(
     bls12_381.g1_add(&vote_point, &seed_point)
 }
 
-fn neg_value(env: &Env, value: G1Affine) -> G1Affine {
+fn neg_value(env: &Env, value: Bls12381G1Affine) -> Bls12381G1Affine {
     // Create -1 in Fr field using fr_sub(0, 1)
     let bls12_381 = env.crypto().bls12_381();
     let zero = U256::from_u32(env, 0);
@@ -36,14 +36,14 @@ fn neg_value(env: &Env, value: G1Affine) -> G1Affine {
 
 fn add_commitment(
     env: &Env,
-    tally: &G1Affine,
-    commitment: &G1Affine,
+    tally: &Bls12381G1Affine,
+    commitment: &Bls12381G1Affine,
     seed: &u128,
-    seed_generator: &G1Affine,
-) -> G1Affine {
+    seed_generator: &Bls12381G1Affine,
+) -> Bls12381G1Affine {
     let bls12_381 = env.crypto().bls12_381();
 
-    let seed_fr = Fr::from_u256(U256::from_u128(env, *seed).clone());
+    let seed_fr = Bls12381Fr::from_u256(U256::from_u128(env, *seed).clone());
     let seed_point = bls12_381.g1_mul(seed_generator, &seed_fr);
     let neg_seed = neg_value(env, seed_point);
 
@@ -54,9 +54,14 @@ fn add_commitment(
     bls12_381.g1_add(tally, &recovered_vote)
 }
 
-fn add_vote(env: &Env, vote: &u128, seed: &u128, tally_vote: &Fr) -> (Fr, Fr) {
-    let vote_fr = Fr::from_u256(U256::from_u128(env, *vote).clone());
-    let seed_fr = Fr::from_u256(U256::from_u128(env, *seed).clone());
+fn add_vote(
+    env: &Env,
+    vote: &u128,
+    seed: &u128,
+    tally_vote: &Bls12381Fr,
+) -> (Bls12381Fr, Bls12381Fr) {
+    let vote_fr = Bls12381Fr::from_u256(U256::from_u128(env, *vote).clone());
+    let seed_fr = Bls12381Fr::from_u256(U256::from_u128(env, *seed).clone());
 
     let mut new_tally_vote = tally_vote.clone();
     new_tally_vote = new_tally_vote.add(vote_fr);
@@ -81,8 +86,8 @@ fn test_vote_maths() {
     let seed_generator_point = bls12_381.hash_to_g1(&seed_generator, &seed_dst);
 
     // init tallies
-    let mut tally_votes = Fr::from_u256(U256::from_u128(&env, 0));
-    let mut tally_seed = Fr::from_u256(U256::from_u128(&env, 0));
+    let mut tally_votes = Bls12381Fr::from_u256(U256::from_u128(&env, 0));
+    let mut tally_seed = Bls12381Fr::from_u256(U256::from_u128(&env, 0));
 
     // casting votes, on-chain store tally_votes, encrypted version of seed_fr and commitment
     let vote_a = 1_u128;
@@ -135,7 +140,7 @@ fn test_vote_maths() {
     assert_eq!(tally.clone(), ref_tally);
 
     // we retrieve the commitments
-    let mut tally_commitment_votes = G1Affine::from_bytes(bytesn!(&env, 0x400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000));
+    let mut tally_commitment_votes = Bls12381G1Affine::from_bytes(bytesn!(&env, 0x400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000));
     tally_commitment_votes = add_commitment(
         &env,
         &tally_commitment_votes,
@@ -170,7 +175,8 @@ fn test_vote_maths() {
     // second check: we know the tally so we can reconstruct the commitment without seed
     // we could add that to the tally_seed_point as we do above, this way we do
     // not leak the individual seed, just the tally of the seed
-    let tally_commitment_votes_ = bls12_381.g1_mul(&vote_generator_point, &Fr::from_u256(tally));
+    let tally_commitment_votes_ =
+        bls12_381.g1_mul(&vote_generator_point, &Bls12381Fr::from_u256(tally));
     assert_eq!(tally_commitment_votes, tally_commitment_votes_);
 }
 
@@ -289,7 +295,7 @@ fn weighted_commitments_roundtrip_bounds_check() {
     // If both proofs pass, the contract records only {C'i} (the weighted commitments).
     // Note: this test demonstrates the algebraic identity that makes (2) tally-time
     // verification possible; it does not implement those NIZKs.
-    let w_fr = Fr::from_u256(U256::from_u32(&env, w));
+    let w_fr = Bls12381Fr::from_u256(U256::from_u32(&env, w));
     let weighted_commitment = bls12_381.g1_mul(&base_commitment, &w_fr);
 
     // Independently reconstruct weighted commitment from weighted tallies
@@ -299,8 +305,8 @@ fn weighted_commitments_roundtrip_bounds_check() {
     // Here we demonstrate the per-vote equivalence locally: T_v = w*v, T_r = w*r
     let t_v: u128 = (w as u128) * v;
     let t_r: u128 = (w as u128) * r;
-    let t_v_fr = Fr::from_u256(U256::from_u128(&env, t_v));
-    let t_r_fr = Fr::from_u256(U256::from_u128(&env, t_r));
+    let t_v_fr = Bls12381Fr::from_u256(U256::from_u128(&env, t_v));
+    let t_r_fr = Bls12381Fr::from_u256(U256::from_u128(&env, t_r));
     let vote_part = bls12_381.g1_mul(&g_vote, &t_v_fr);
     let seed_part = bls12_381.g1_mul(&g_seed, &t_r_fr);
     let reconstructed = bls12_381.g1_add(&vote_part, &seed_part);
@@ -313,7 +319,7 @@ fn weighted_commitments_roundtrip_bounds_check() {
     // On-chain: a proof system should also rule out w=0; identity check is a sanity guard.
     let mut g1_identity = [0u8; 96];
     g1_identity[0] = 0x40; // compressed identity encoding used in other tests
-    let id = G1Affine::from_bytes(soroban_sdk::BytesN::from_array(&env, &g1_identity));
+    let id = Bls12381G1Affine::from_bytes(soroban_sdk::BytesN::from_array(&env, &g1_identity));
     assert_ne!(weighted_commitment, id);
 
     // Summary of flows:
