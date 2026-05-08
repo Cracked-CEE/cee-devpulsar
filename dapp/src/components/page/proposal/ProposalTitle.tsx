@@ -12,6 +12,7 @@ import ProposalStatusSection from "./ProposalStatusSection";
 import VoteStatusBar from "./VoteStatusBar";
 import VotingResultModal from "./VotingResultModal";
 import VerifyAnonymousVotesModal from "./VerifyAnonymousVotesModal";
+import RemoveVoteModal from "./RemoveVoteModal";
 
 interface Props {
   proposal: ProposalView | null;
@@ -29,6 +30,7 @@ const ProposalTitle: React.FC<Props> = ({
   const connectedAddress = useStore(connectedPublicKey);
   const [showVotingResultModal, setShowVotingResultModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [showRemoveVoteModal, setShowRemoveVoteModal] = useState(false);
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [showMemberProfile, setShowMemberProfile] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -164,6 +166,16 @@ const ProposalTitle: React.FC<Props> = ({
                     Vote
                   </Button>
                 )}
+                {proposal?.status == "active" && isMaintainer && (
+                  <Button
+                    size="sm"
+                    type="tertiary"
+                    className="border-red-500! text-red-500!"
+                    onClick={() => setShowRemoveVoteModal(true)}
+                  >
+                    Remove Vote
+                  </Button>
+                )}
                 {proposal?.status == "voted" && isMaintainer && (
                   <Button
                     size="sm"
@@ -192,6 +204,15 @@ const ProposalTitle: React.FC<Props> = ({
           projectName={proposal.projectName}
           proposalId={proposal.id}
           onClose={() => setShowVerifyModal(false)}
+        />
+      )}
+      {showRemoveVoteModal && proposal?.voteStatus && (
+        <RemoveVoteModal
+          projectName={proposal.projectName}
+          proposalId={proposal.id}
+          voteStatus={proposal.voteStatus}
+          onClose={() => setShowRemoveVoteModal(false)}
+          onRemoved={() => window.location.reload()}
         />
       )}
       {showConflictModal && proposal && (
