@@ -16,7 +16,7 @@ jobs:
   # Environment gate
   approve-release:
     runs-on: ubuntu-latest
-    environment: build-contract
+    environment: publish-contract
     permissions: { }
     steps:
       - run: echo "Approved release"
