@@ -366,7 +366,7 @@ impl DaoTrait for Tansu {
     ///
     /// # Panics
     /// * If the maintainer is not authorized
-    /// * If the proposal is not active or voting period has ended
+    /// * If the proposal is not active
     /// * If no vote from the given voter exists
     fn remove_vote(
         env: Env,
