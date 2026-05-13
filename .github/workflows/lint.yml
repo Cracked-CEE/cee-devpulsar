@@ -34,11 +34,11 @@ jobs:
 
       - name: Run pre-commit
         run: |
-          pre-commit run --show-diff-on-failure --color=always zizmor
+          pre-commit run --all-files --show-diff-on-failure --color=always zizmor
           pre-commit run --show-diff-on-failure --color=always ruff
           pre-commit run --show-diff-on-failure --color=always ruff-format
-          pre-commit run --show-diff-on-failure --color=always clippy
-          pre-commit run --show-diff-on-failure --color=always rustfmt
+          pre-commit run --all-files --show-diff-on-failure --color=always clippy
+          pre-commit run --all-files --show-diff-on-failure --color=always rustfmt
 
   website-dapp:
     runs-on: ubuntu-latest
@@ -59,7 +59,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22.12.0"
+          node-version: "latest"
 
       - name: Sync legal docs from root
         run: |

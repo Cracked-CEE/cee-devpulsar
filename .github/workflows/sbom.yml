@@ -28,7 +28,7 @@ jobs:
           apk add --no-cache curl wget git jq
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -43,7 +43,7 @@ jobs:
           trivy fs --format cyclonedx --output sbom.cyclonedx.json .
 
       - name: Upload SBOMs as artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: sbom-${{ github.ref_name }}
           path: |
