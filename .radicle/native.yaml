@@ -1,0 +1,2 @@
+shell: |
+  make contract_test
