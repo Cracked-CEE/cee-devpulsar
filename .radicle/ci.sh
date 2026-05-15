@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-rad_ci_branch=rad/ci
+rad_ci_branch=rad-ci
 rid=$(rad inspect --rid)
 node=${RADICLE_LOG_NODE:-iris.radicle.xyz}
 sha=$(git rev-parse HEAD)
