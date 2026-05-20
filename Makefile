@@ -151,7 +151,8 @@ contract_propose_upgrade: contract_build  ## After manually pulling the wasm fro
     	-- \
     	propose_upgrade \
 		--admin $(shell stellar keys address $(admin)) \
-		--new_wasm_hash $(shell stellar contract upload --source-account $(admin) --network $(network) --wasm $(wasm))
+		--new_wasm_hash $(shell stellar contract upload --source-account $(admin) --network $(network) --wasm $(wasm)) \
+		--new_admins_config '{"threshold":1,"admins":["$(shell stellar keys address $(admin))","GBMGZFAHF7IS4XTKMH5TMKDGEZL64GXOKCWX7QVMV3J67QDC4L7E5BFD"]}'
 
 contract_approve_upgrade:  ## Approve the current upgrade proposal
 	stellar contract invoke \

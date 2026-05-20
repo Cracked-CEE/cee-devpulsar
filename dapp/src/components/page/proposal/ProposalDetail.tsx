@@ -377,7 +377,7 @@ export const OutcomeDetail: React.FC<{
             <span
               className={`px-3 py-1 text-xs font-bold uppercase border-[#FFB21E] bg-[#FFB21E] text-white border`}
             >
-              Most Voted Outcome
+              Executed Outcome
             </span>
           )}
         </div>
