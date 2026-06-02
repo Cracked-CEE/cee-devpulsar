@@ -184,7 +184,7 @@ contract_get_upgrade_proposal:  ## Get the current upgrade proposal
 # --------- Radicle --------- #
 
 radicle_push:
-	git push origin rad
+	git push rad main
 
 radicle_ci:  ## Run test and register the results on Radicle
 	.radicle/ci.sh
