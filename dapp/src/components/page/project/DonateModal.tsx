@@ -13,7 +13,6 @@ import { toast } from "utils/utils";
 import Button from "components/utils/Button";
 
 import { sendXLM } from "service/TxService";
-import { getAddressFromDomain } from "service/SorobanDomainContractService";
 import { StrKey } from "@stellar/stellar-sdk";
 
 interface Props {
@@ -77,27 +76,19 @@ const DonateModal: FC<Props> = ({ children, onBeforeOpen }) => {
     setIsLoading(true);
 
     try {
-      // Resolve domain owner
-      const domainInfo = await getAddressFromDomain("tansu").catch(() => null);
-      if (!domainInfo || !domainInfo.owner) {
-        toast.error(
-          "Support",
-          "Could not resolve domain owner. Please try again.",
-        );
+      const recipientAddress = import.meta.env.PUBLIC_TANSU_OWNER_ID;
+      if (
+        !recipientAddress ||
+        !StrKey.isValidEd25519PublicKey(recipientAddress)
+      ) {
+        toast.error("Support", "Invalid donation recipient address.");
         return;
       }
-
-      let dest = (domainInfo as any).address || domainInfo.owner;
-      if (!StrKey.isValidEd25519PublicKey(dest)) {
-        toast.error("Support", "Invalid owner address in domain record.");
-        return;
-      }
-      const domainOwnerAddress = dest as string;
 
       // Attempt payment (sendXLM handles wallet checks)
       const payment = await sendXLM(
         amount.toString(),
-        domainOwnerAddress,
+        recipientAddress,
         tipAmount.toString(),
         donateMessage,
       );

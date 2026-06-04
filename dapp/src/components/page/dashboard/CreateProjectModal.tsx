@@ -14,7 +14,7 @@ import Label from "components/utils/Label.tsx";
 import FlowProgressModal from "components/utils/FlowProgressModal.tsx";
 import Step from "components/utils/Step.tsx";
 import Title from "components/utils/Title.tsx";
-import { useState, type FC, useCallback, useEffect, useRef } from "react";
+import { useState, type FC, useEffect, useRef } from "react";
 import { extractConfigData, toast } from "utils/utils";
 import {
   validateProjectName as validateProjectNameUtil,
@@ -23,7 +23,6 @@ import {
 } from "utils/validations.ts";
 import { fetchTomlFromIpfs } from "utils/ipfsFunctions";
 import Textarea from "components/utils/Textarea.tsx";
-import Spinner from "components/utils/Spinner.tsx";
 import { ProjectType } from "types/projectConfig";
 import {
   getRepositoryHandleLabel,
@@ -38,11 +37,6 @@ import {
 import MarkdownEditorWithImages, {
   type AttachedImage,
 } from "components/utils/MarkdownEditorWithImages";
-
-// Get domain contract ID from environment with fallback
-const SOROBAN_DOMAIN_CONTRACT_ID =
-  import.meta.env.PUBLIC_SOROBAN_DOMAIN_CONTRACT_ID ||
-  "CAXOTRU4DBR736ZG4E7VBFKGVCCHG6FOH7HFXMB3BH27VUKPHOJWO3XM"; // Fallback value
 
 // Define ModalProps type for the modal component
 type ModalProps = {
@@ -84,12 +78,6 @@ const CreateProjectModal: FC<ModalProps> = ({ onClose }) => {
   const [readmeImageFiles, setReadmeImageFiles] = useState<AttachedImage[]>([]);
   const [readmeImageError, setReadmeImageError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [domainContractId] = useState(SOROBAN_DOMAIN_CONTRACT_ID);
-  const [domainStatus, setDomainStatus] = useState<
-    "checking" | "available" | "unavailable" | null
-  >(null);
-  const [domainCheckTimeout, setDomainCheckTimeout] =
-    useState<NodeJS.Timeout | null>(null);
 
   const walletKey = useStore(connectedPublicKey);
   const isWalletReady = useStore(walletInitialized);
@@ -165,157 +153,29 @@ const CreateProjectModal: FC<ModalProps> = ({ onClose }) => {
   const [isSuccessful, setIsSuccessful] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Verify domain contract ID on mount
-  useEffect(() => {
-    // Ensure it's a valid Stellar address format
-    if (!/^[A-Z0-9]{56}$/.test(domainContractId)) {
-      // Silent validation, don't log anything
-    }
-  }, [domainContractId]);
-
-  // Function to check if a domain exists
-  const checkDomainExists = async (domain: string): Promise<boolean> => {
+  const checkProjectNameAvailable = async (name: string): Promise<boolean> => {
     try {
-      // Try to get the project with this name - if it exists, the domain is taken
-      const project = await getProjectFromName(domain);
-      return !!project && project.name === domain;
+      const project = await getProjectFromName(name);
+      return !(project && project.name === name);
     } catch (error: any) {
-      // If we get a specific error that indicates the project doesn't exist, return false
       if (
         error.message &&
         (error.message.includes("No project defined") ||
           error.message.includes("not found") ||
           error.message.includes("record not found") ||
-          error.message.includes("Invalid Key") ||
-          error.message.includes("Domain not found") ||
-          error.message.includes("Domain does not exist"))
+          error.message.includes("Invalid Key"))
       ) {
-        return false;
-      }
-      // Re-throw other errors
-      throw error;
-    }
-  };
-
-  // Full SorobanDomain validation (restored from original)
-  const validateProjectName = useCallback(async () => {
-    if (!projectName.trim()) {
-      throw new Error("Project name cannot be empty");
-    }
-
-    if (projectName.length < 4 || projectName.length > 15) {
-      throw new Error("The length of project name should be between 4 and 15.");
-    }
-
-    if (!/^[a-z]+$/.test(projectName)) {
-      throw new Error("Project name can only contain lowercase letters (a-z)");
-    }
-
-    // Check domain availability
-    try {
-      const domainExists = await checkDomainExists(projectName);
-      if (domainExists) {
-        throw new Error("Domain name already registered");
-      }
-    } catch (err: any) {
-      // Only re-throw if it's our custom "already registered" error
-      if (err.message && err.message.includes("already registered")) {
-        throw err;
-      }
-      // For other errors, silently continue
-    }
-
-    try {
-      // First check in a try/catch to protect against non-existent projects
-      const project = await getProjectFromName(projectName);
-
-      // If we reach here, the project exists
-      if (project && project.name === projectName) {
-        throw new Error("Project name already registered");
-      }
-    } catch (err: any) {
-      // Check if it's a specific error that indicates the project doesn't exist
-      if (
-        err.message &&
-        (err.message.includes("No project defined") ||
-          err.message.includes("not found") ||
-          err.message.includes("record not found") ||
-          err.message.includes("Invalid Key"))
-      ) {
-        // This means the project doesn't exist, which is what we want
         return true;
-      } else if (err.message && err.message.includes("already registered")) {
-        // Re-throw specific errors about project already being registered
-        throw err;
       }
-      // For any other errors, assume it's safe to proceed
       return true;
     }
-
-    // If we get here, project exists but the name doesn't match exactly
-    return true;
-  }, [projectName]);
+  };
 
   // Update maintainersErrors array when maintainers change
   useEffect(() => {
     setMaintainersErrors(maintainerAddresses.map(() => null));
     setGithubHandleErrors(maintainerGithubs.map(() => null));
   }, [maintainerAddresses.length]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (domainCheckTimeout) {
-        clearTimeout(domainCheckTimeout);
-      }
-    };
-  }, [domainCheckTimeout]);
-
-  // Check domain availability with debounce (restored from original)
-  useEffect(() => {
-    if (!projectName || projectName.length < 4) {
-      setDomainStatus(null);
-      return;
-    }
-
-    setDomainStatus("checking");
-
-    // Clear previous timeout if it exists
-    if (domainCheckTimeout) {
-      clearTimeout(domainCheckTimeout);
-    }
-
-    // Set a new timeout to check domain availability
-    const timeout = setTimeout(async () => {
-      try {
-        // Use the validateProjectName function to check availability
-        await validateProjectName();
-        // If we get here without an error, the domain is available
-        setDomainStatus("available");
-      } catch (error: any) {
-        // If the error message contains "already registered", the domain is unavailable
-        if (
-          error.message &&
-          (error.message.includes("already registered") ||
-            error.message.includes("Project name already registered"))
-        ) {
-          setDomainStatus("unavailable");
-        } else {
-          // Silently handle other errors
-          setDomainStatus(null);
-        }
-      }
-    }, 1000); // 1000ms (1 second) debounce
-
-    setDomainCheckTimeout(timeout);
-
-    // Cleanup on unmount
-    return () => {
-      if (domainCheckTimeout) {
-        clearTimeout(domainCheckTimeout);
-      }
-    };
-  }, [projectName, validateProjectName]);
 
   const validateMaintainers = () => {
     let isValid = true;
@@ -483,28 +343,18 @@ ${maintainerGithubs.map((gh) => `[[PRINCIPALS]]\ngithub="${gh}"`).join("\n\n")}
     }
   };
 
-  // Validate project name (SorobanDomain) and set error — full logic restored
   const validateAndSetProjectNameError = async () => {
     try {
-      // First check basic validation
       const nameError = validateProjectNameUtil(projectName);
       if (nameError) {
         setProjectNameError(nameError);
         return false;
       }
 
-      // Check domain availability
-      try {
-        const domainExists = await checkDomainExists(projectName);
-        if (domainExists) {
-          setProjectNameError("Domain name already registered");
-          return false;
-        }
-      } catch (err: any) {
-        if (err.message && err.message.includes("already registered")) {
-          setProjectNameError("Domain name already registered");
-          return false;
-        }
+      const isAvailable = await checkProjectNameAvailable(projectName);
+      if (!isAvailable) {
+        setProjectNameError("Project name already registered");
+        return false;
       }
 
       setProjectNameError(null);
@@ -564,52 +414,21 @@ ${maintainerGithubs.map((gh) => `[[PRINCIPALS]]\ngithub="${gh}"`).join("\n\n")}
                     }
                   />
                 </div>
-                <div className="relative">
-                  <Input
-                    label="Project Name (On-chain)"
-                    placeholder="Write the project name (e.g., myproject)"
-                    value={projectName}
-                    onChange={(e) => {
-                      // Only allow lowercase letters a-z (SorobanDomain restriction)
-                      const validInput = e.target.value.replace(/[^a-z]/g, "");
-                      setProjectName(validInput);
-                      setProjectNameError(null); // Clear error when typing
-                    }}
-                    description={
-                      projectName.length >= 4 &&
-                      projectName.length <= 15 &&
-                      /^[a-z]+$/.test(projectName)
-                        ? "This will be your unique on-chain identifier (e.g., myproject.xlm)"
-                        : "Project name should be between 4-15 lowercase letters (a-z)"
-                    }
-                    error={projectNameError}
-                  />
-                  {domainStatus && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/3 flex items-center">
-                      {domainStatus === "checking" ? (
-                        <Spinner />
-                      ) : domainStatus === "available" ? (
-                        <div className="flex items-center text-green-600">
-                          <img
-                            src="/icons/check.svg"
-                            alt="Available"
-                            className="h-5 w-5 mr-1"
-                          />
-                          <span className="text-sm">Available</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center text-red-600">
-                          <img
-                            src="/icons/failed.svg"
-                            alt="Unavailable"
-                            className="h-5 w-5 mr-1"
-                          />
-                          <span className="text-sm">Unavailable</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <Input
+                  label="Project Name (On-chain)"
+                  placeholder="Write the project name (e.g., myproject)"
+                  value={projectName}
+                  onChange={(e) => {
+                    const validInput = e.target.value.replace(
+                      /[^a-zA-Z0-9]/g,
+                      "",
+                    );
+                    setProjectName(validInput);
+                    setProjectNameError(null);
+                  }}
+                  description="Project name must be 4-30 alphanumeric characters (a-z, A-Z, 0-9). This will be your unique on-chain identifier."
+                  error={projectNameError}
+                />
                 <Input
                   label="Project Full Name"
                   placeholder="My Awesome Project"
@@ -739,7 +558,6 @@ ${maintainerGithubs.map((gh) => `[[PRINCIPALS]]\ngithub="${gh}"`).join("\n\n")}
                       return;
                     }
 
-                    // Perform SorobanDomain validation
                     const isValid = await validateAndSetProjectNameError();
 
                     if (
@@ -1030,6 +848,10 @@ ${maintainerGithubs.map((gh) => `[[PRINCIPALS]]\ngithub="${gh}"`).join("\n\n")}
                   title="Review and Submit Your Project"
                   description="Take a moment to review your project details before submitting. You can go back and make changes if needed."
                 />
+                <p className="text-sm text-secondary">
+                  <span className="font-semibold">Note:</span> Project
+                  registration requires a 5 XLM collateral deposit.
+                </p>
               </div>
               <div className="flex gap-[18px]">
                 <Button
@@ -1060,9 +882,7 @@ ${maintainerGithubs.map((gh) => `[[PRINCIPALS]]\ngithub="${gh}"`).join("\n\n")}
               </Button>
             </div>
             <Label label="Project Name (On-chain)">
-              <p className="leading-6 text-xl text-primary">
-                {projectName}.xlm
-              </p>
+              <p className="leading-6 text-xl text-primary">{projectName}</p>
             </Label>
             {projectFullName && (
               <Label label="Project Full Name">

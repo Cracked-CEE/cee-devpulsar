@@ -19,7 +19,6 @@ export const contractErrorMessages = {
   // Authorization/Permission (100-199)
   100: "The user is not a maintainer.",
   101: "You are invalid voter.",
-  102: "The maintainer is not the domain owner.",
   103: "Need a minimum of one maintainer",
 
   // Validation (200-299)
@@ -29,7 +28,7 @@ export const contractErrorMessages = {
   203: "There was a validation issue with the proposal input.",
   204: "The member does not exist. Please ensure the member address is correct and the member has been registered.",
   205: "The member already exists.",
-  206: "There is an invalid domain error.",
+  206: "The project name is invalid.",
   207: "The voting type is wrong.",
   208: "Bad commitment.",
   209: "Invalid voter weight calculation.",

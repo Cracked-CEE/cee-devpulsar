@@ -13,7 +13,7 @@ Tansu complements platforms like GitHub by providing:
 - **On-chain project registration**: Projects are registered and tracked on Stellar, with commit hashes and metadata verifiable by anyone.
 - **Decentralized Autonomous Organization (DAO)**: Every project gets its own DAO, enabling maintainers and contributors to propose, vote, and execute decisions transparently.
 - **Badge-based membership**: Roles and voting power are managed through on-chain badges, reflecting real project contributions.
-- **Integration with Soroban Domains**: Project names are protected and mapped to Soroban Domains, preventing squatting and ensuring authenticity.
+- **Collateral-based registration**: Project creation requires a 5 XLM collateral deposit, preventing spam and name squatting.
 - **Open, auditable governance**: All actions—adding maintainers, updating metadata, voting—are recorded on-chain.
 
 ## Distinction with GitHub

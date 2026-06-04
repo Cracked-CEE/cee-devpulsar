@@ -4,7 +4,6 @@ const requiredEnv = [
   "PUBLIC_HORIZON_URL",
   "PUBLIC_TANSU_CONTRACT_ID",
   "PUBLIC_TANSU_OWNER_ID",
-  "PUBLIC_SOROBAN_DOMAIN_CONTRACT_ID",
   "PUBLIC_DELEGATION_API_URL",
 ];
 
@@ -69,13 +68,6 @@ export function validateFreighterEnvironment(): {
   if (contractId && !/^[A-Z0-9]{56}$/.test(contractId)) {
     warnings.push(
       "PUBLIC_TANSU_CONTRACT_ID should be a valid 56-character Stellar address",
-    );
-  }
-
-  const domainContractId = import.meta.env.PUBLIC_SOROBAN_DOMAIN_CONTRACT_ID;
-  if (domainContractId && !/^[A-Z0-9]{56}$/.test(domainContractId)) {
-    warnings.push(
-      "PUBLIC_SOROBAN_DOMAIN_CONTRACT_ID should be a valid 56-character Stellar address",
     );
   }
 

@@ -1,8 +1,8 @@
 extern crate std;
 use super::test_utils::{create_test_data, init_contract};
+use crate::errors::ContractErrors;
 use crate::events::ProjectRegistered;
 use crate::types::Project;
-use crate::{contract_versioning::domain_register, errors::ContractErrors};
 use soroban_sdk::testutils::Events;
 use soroban_sdk::{Bytes, Event, String, Vec, vec};
 
@@ -77,7 +77,7 @@ fn register_name_too_long_error() {
     let setup = create_test_data();
     let _id = init_contract(&setup);
 
-    let name_long = String::from_str(&setup.env, "tansutansutansutansu");
+    let name_long = String::from_str(&setup.env, "tansutansutansutansutansutansux");
     let url = String::from_str(&setup.env, "github.com/tansu");
     let ipfs = String::from_str(&setup.env, "2ef4f49fdd8fa9dc463f1f06a094c26b88710990");
     let maintainers = vec![&setup.env, setup.grogu.clone(), setup.mando.clone()];
@@ -88,31 +88,44 @@ fn register_name_too_long_error() {
         .try_register(&setup.grogu, &name_long, &maintainers, &url, &ipfs)
         .unwrap_err()
         .unwrap();
-    assert_eq!(err, ContractErrors::InvalidDomainError.into());
+    assert_eq!(err, ContractErrors::InvalidProjectName.into());
 }
 
 #[test]
-fn register_maintainer_not_domain_owner_error() {
+fn register_invalid_name_chars_error() {
     let setup = create_test_data();
     let _id = init_contract(&setup);
 
-    let _name = String::from_str(&setup.env, "tansu");
+    // name with a dash — special chars are not allowed
+    let name_invalid = String::from_str(&setup.env, "my-project");
     let url = String::from_str(&setup.env, "github.com/tansu");
     let ipfs = String::from_str(&setup.env, "2ef4f49fdd8fa9dc463f1f06a094c26b88710990");
     let maintainers = vec![&setup.env, setup.grogu.clone(), setup.mando.clone()];
 
-    // maintainer not domain owner
-    let name_b = Bytes::from_slice(&setup.env, b"bob");
-    let genesis_amount: i128 = 1_000_000_000 * 10_000_000;
-    setup.token_stellar.mint(&setup.mando, &genesis_amount);
-    domain_register(&setup.env, &name_b, &setup.mando, setup.domain_id.clone());
-    let name_b_str = String::from_str(&setup.env, "bob");
     let err = setup
         .contract
-        .try_register(&setup.grogu, &name_b_str, &maintainers, &url, &ipfs)
+        .try_register(&setup.grogu, &name_invalid, &maintainers, &url, &ipfs)
         .unwrap_err()
         .unwrap();
-    assert_eq!(err, ContractErrors::MaintainerNotDomainOwner.into());
+    assert_eq!(err, ContractErrors::InvalidProjectName.into());
+}
+
+#[test]
+fn register_insufficient_collateral_error() {
+    let setup = create_test_data();
+
+    let name = String::from_str(&setup.env, "newproject");
+    let url = String::from_str(&setup.env, "github.com/newproject");
+    let ipfs = String::from_str(&setup.env, "2ef4f49fdd8fa9dc463f1f06a094c26b88710990");
+    let maintainers = vec![&setup.env, setup.grogu.clone()];
+
+    // grogu has no tokens — collateral transfer should fail
+    let err = setup
+        .contract
+        .try_register(&setup.grogu, &name, &maintainers, &url, &ipfs)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, ContractErrors::CollateralError.into());
 }
 
 #[test]

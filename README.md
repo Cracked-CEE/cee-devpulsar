@@ -19,7 +19,7 @@ voting mechanisms.
 - **On-chain Version Control**: Immutable commit hash tracking
 - **Decentralized Governance**: Community proposals with public and anonymous voting
 - **Membership System**: Role-based access control with achievement badges
-- **Domain Integration**: Soroban Domains prevent name squatting and ensure authenticity
+- **Collateral-based Registration**: A 5 XLM deposit is required to register a project, preventing spam and name squatting
 - **IPFS Storage**: Decentralized content storage for proposals and project metadata
 - **Privacy-First**: Optional anonymous voting with cryptographic commitment schemes
 - **Real-time Events**: Instant updates through blockchain event streaming

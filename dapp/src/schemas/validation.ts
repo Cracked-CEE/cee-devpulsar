@@ -29,8 +29,11 @@ export const stellarPrincipalSchema = z
 export const projectNameSchema = z
   .string()
   .min(4, "Project name must be at least 4 characters")
-  .max(15, "Project name must be at most 15 characters")
-  .regex(/^[a-z]+$/, "Project name can only contain lowercase letters (a-z)")
+  .max(30, "Project name must be at most 30 characters")
+  .regex(
+    /^[a-zA-Z0-9]+$/,
+    "Project name can only contain letters (a-z, A-Z) and digits (0-9)",
+  )
   .refine((name) => name.trim().length > 0, "Project name cannot be empty");
 
 export const githubUrlSchema = z

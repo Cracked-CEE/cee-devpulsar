@@ -120,7 +120,6 @@ export type VoteChoice =
   | { tag: "Abstain"; values: void };
 
 export type ContractKey =
-  | { tag: "Domain"; values: void }
   | { tag: "Collateral"; values: void }
   | { tag: "Nqg"; values: void };
 
@@ -181,7 +180,6 @@ export const ContractErrors = {
   0: { message: "UnexpectedError" },
   100: { message: "UnauthorizedSigner" },
   101: { message: "WrongVoter" },
-  102: { message: "MaintainerNotDomainOwner" },
   103: { message: "MissingMaintainer" },
   200: { message: "InvalidKey" },
   201: { message: "ProjectAlreadyExist" },
@@ -189,7 +187,7 @@ export const ContractErrors = {
   203: { message: "ProposalInputValidation" },
   204: { message: "UnknownMember" },
   205: { message: "MemberAlreadyExist" },
-  206: { message: "InvalidDomainError" },
+  206: { message: "InvalidProjectName" },
   207: { message: "WrongVoteType" },
   208: { message: "BadCommitment" },
   209: { message: "VoterWeight" },
@@ -781,20 +779,6 @@ export interface Client {
   ) => Promise<AssembledTransaction<null>>;
 
   /**
-   * Construct and simulate a set_domain_contract transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Set the Soroban Domain contract.
-   *
-   * # Arguments
-   * * `env` - The environment object
-   * * `admin` - The admin address
-   * * `domain_contract` - The new domain contract
-   */
-  set_domain_contract: (
-    { admin, domain_contract }: { admin: string; domain_contract: ContractRef },
-    options?: MethodOptions,
-  ) => Promise<AssembledTransaction<null>>;
-
-  /**
    * Construct and simulate a get_upgrade_proposal transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get upgrade proposal details
    */
@@ -1283,7 +1267,6 @@ export class Client extends ContractClient {
     set_nqg_contract: this.txFromJSON<null>,
     get_admins_config: this.txFromJSON<AdminsConfig>,
     require_not_paused: this.txFromJSON<null>,
-    set_domain_contract: this.txFromJSON<null>,
     get_upgrade_proposal: this.txFromJSON<UpgradeProposal>,
     set_collateral_contract: this.txFromJSON<null>,
     add_member: this.txFromJSON<null>,
