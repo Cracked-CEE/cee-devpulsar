@@ -5,12 +5,11 @@ const { keccak256 } = pkg;
 
 /**
  * Derive the canonical project key from a project name.
- * Always lowercases the name before hashing to ensure consistent IDs across the app.
+ * Hashes the raw name (case-sensitive) to match the on-chain contract. Do NOT
+ * lowercase: the contract treats "MyProject" and "myproject" as distinct keys.
  */
 export function deriveProjectKey(projectName: string): Buffer {
-  return Buffer.from(
-    keccak256.create().update(projectName.toLowerCase()).digest(),
-  );
+  return Buffer.from(keccak256.create().update(projectName).digest());
 }
 
 const SUBPROJECT_KEY_BYTES = 32;

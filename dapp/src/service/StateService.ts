@@ -73,7 +73,7 @@ function setProjectId(project_name: string): void {
   projectState.project_name = project_name;
 
   projectState.project_id = Buffer.from(
-    keccak256.create().update(project_name.toLowerCase()).digest(),
+    keccak256.create().update(project_name).digest(),
   );
 
   if (typeof window !== "undefined") {

@@ -185,10 +185,10 @@ export async function fetchOnChainActions(
           case "register": {
             projectName = paramToString(args[1]); // name is arg1 (maintainer is arg0)
             if (projectName) {
-              // keccak key (derived) – used by some off-chain calls
-              const keyHex = normalizeHex(
-                keccak_256(projectName.toLowerCase()),
-              );
+              // keccak key (derived) – used by some off-chain calls.
+              // Hash the raw name to match the on-chain contract (case-sensitive),
+              // consistent with deriveProjectKey().
+              const keyHex = normalizeHex(keccak_256(projectName));
               PROJECT_CACHE.set(keyHex!, projectName);
               details.name = projectName;
 
