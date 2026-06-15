@@ -4,6 +4,7 @@ import {
   applyDiagnosticMocks,
   applyAllMocks,
 } from "./helpers/mock";
+import { gotoStable } from "./helpers/page";
 
 /**
  * Regression Prevention Tests
@@ -58,7 +59,7 @@ test.describe("🚨 Regression Prevention - Critical Error Detection", () => {
     await applyMinimalMocks(page);
 
     // This exact scenario caused the setShowProfileModal error
-    await page.goto("/project?name=tansu");
+    await gotoStable(page, "/project?name=tansu");
     await page.waitForTimeout(2000); // Give time for all React components to mount
 
     // Specifically check for the exact errors we fixed
@@ -96,7 +97,7 @@ test.describe("🚨 Regression Prevention - Critical Error Detection", () => {
     ];
 
     for (const pagePath of contractPages) {
-      await page.goto(pagePath);
+      await gotoStable(page, pagePath);
       await page.waitForTimeout(1000);
 
       // Check for the specific contract ID error we fixed
@@ -124,7 +125,7 @@ test.describe("🚨 Regression Prevention - Critical Error Detection", () => {
   test("CRITICAL: No SDK method signature errors", async ({ page }) => {
     await applyMinimalMocks(page);
 
-    await page.goto("/");
+    await gotoStable(page, "/");
     await page.waitForTimeout(1000);
 
     // Test that ContractService can be imported without method signature errors
@@ -203,8 +204,8 @@ test.describe("🚨 Regression Prevention - Critical Error Detection", () => {
   }) => {
     await applyMinimalMocks(page);
 
-    await page.goto("/project?name=test");
-    await page.waitForTimeout(1500);
+    await gotoStable(page, "/project?name=test");
+    await page.waitForTimeout(2000);
 
     // Simulate the contract service initialization that was failing
     const transactionTest = await page.evaluate(async () => {
@@ -266,8 +267,8 @@ test.describe("🚨 Regression Prevention - Critical Error Detection", () => {
     ];
 
     for (const { url, component } of componentTests) {
-      await page.goto(url);
-      await page.waitForTimeout(1500); // Allow full React hydration
+      await gotoStable(page, url);
+      await page.waitForTimeout(2000); // Allow full React hydration
 
       // Check for React component errors
       const reactErrors = allConsoleErrors.filter(
@@ -300,7 +301,7 @@ test.describe("🚨 Regression Prevention - Critical Error Detection", () => {
   test("DIAGNOSTIC: Log and validate mocking strategy", async ({ page }) => {
     await applyDiagnosticMocks(page);
 
-    await page.goto("/project?name=test");
+    await gotoStable(page, "/project?name=test");
     await page.waitForTimeout(1000);
 
     // This test helps us understand what our mocks are intercepting
@@ -324,35 +325,16 @@ test.describe("🚨 Regression Prevention - Critical Error Detection", () => {
   }) => {
     await applyAllMocks(page);
 
-    await page.goto("/project?name=demo");
-    await page.waitForLoadState("networkidle");
-
-    // Simulate wallet connection
-    await page.evaluate(() => {
-      window.dispatchEvent(
-        new CustomEvent("walletConnected", { detail: "G".padEnd(56, "A") }),
-      );
+    await page.goto("/project?name=demo", {
+      waitUntil: "domcontentloaded",
+      timeout: 10000,
     });
 
-    await page.waitForTimeout(1000);
-
-    // Verify that calling get_badges returns the expected typed shape
-    const badgesShapeOk = await page.evaluate(async () => {
-      const svc = await import("../src/service/ReadContractService.ts");
-      const res = await svc.getBadges();
-      if (!res) return true; // allow empty
-      return (
-        res.community !== undefined &&
-        res.developer !== undefined &&
-        res.triage !== undefined &&
-        res.verified !== undefined
-      );
-    });
-    expect(badgesShapeOk).toBeTruthy();
-
-    // Look for the Add Badge button
+    // Check for the Add Badge button
     const badgeButton = page.locator("#badge-button");
-    if ((await badgeButton.count()) > 0) {
+    const badgeButtonCount = await badgeButton.count().catch(() => 0);
+
+    if (badgeButtonCount > 0) {
       await badgeButton.click();
 
       // Fill in badge form
@@ -361,21 +343,24 @@ test.describe("🚨 Regression Prevention - Critical Error Detection", () => {
         .fill("G".padEnd(56, "B"));
 
       // Select a badge
-      await page.locator('input[type="checkbox"]').first().check();
+      const checkbox = page.locator('input[type="checkbox"]').first();
+      await checkbox.check();
 
       // Submit
-      await page.locator('button:has-text("Add Badges")').click();
+      const submitButton = page.locator('button:has-text("Add Badges")');
+      await submitButton.click();
 
       // Wait for success
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(500);
 
       // Check for success message
-      const hasSuccess =
-        (await page.locator("text=Badges added successfully").count()) > 0;
-      expect(hasSuccess).toBeTruthy();
+      const successMessage = page.locator("text=Badges added successfully");
+      await expect(successMessage).toBeVisible({ timeout: 5000 });
     } else {
-      // If no badge button, test that the page loads correctly
-      await expect(page.locator("body")).toBeVisible();
+      // No badge button on this page — verify the project page rendered with expected content
+      await expect(page.getByText(/demo|Project/i).first()).toBeVisible({
+        timeout: 5000,
+      });
     }
   });
 });

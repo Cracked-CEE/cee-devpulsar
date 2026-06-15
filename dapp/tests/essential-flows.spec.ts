@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import type { ConsoleMessage, Page } from "@playwright/test";
 import { applyAllMocks, applyMinimalMocks } from "./helpers/mock";
 
 // Extend Window interface for mockGetMemberResponse
@@ -43,86 +44,99 @@ test.describe("Essential Production Validation", () => {
     page.setDefaultTimeout(12000);
   });
 
+  const withMockedPage = async (
+    page: Page,
+    pagePath: string,
+    callback: (navigationPage: Page) => Promise<void>,
+  ) => {
+    const navigationPage = await page.context().newPage();
+    navigationPage.setDefaultTimeout(12000);
+
+    navigationPage.on("pageerror", (error: Error) => {
+      jsErrors.push(`PageError: ${error.message}`);
+    });
+
+    navigationPage.on("console", (msg: ConsoleMessage) => {
+      if (msg.type() === "error") {
+        const errorText = msg.text();
+        globalErrors.push(errorText);
+
+        if (
+          errorText.includes("setShowProfileModal is not defined") ||
+          errorText.includes("Cannot read properties of undefined") ||
+          errorText.includes("signedXDRToResult is not a function") ||
+          errorText.includes("Invalid contract ID: undefined")
+        ) {
+          console.error("CRITICAL ERROR DETECTED:", errorText);
+        }
+      }
+    });
+
+    try {
+      await applyAllMocks(navigationPage);
+      await navigationPage.goto(pagePath, {
+        waitUntil: "domcontentloaded",
+        timeout: 10000,
+      });
+      await expect(navigationPage.locator("[data-connect]")).toBeVisible({
+        timeout: 5000,
+      });
+      await navigationPage.waitForTimeout(100);
+      await callback(navigationPage);
+    } finally {
+      await navigationPage.close().catch(() => {});
+    }
+  };
+
   test("App loads and core functionality works WITHOUT JavaScript errors", async ({
     page,
   }) => {
-    await applyAllMocks(page);
+    await withMockedPage(page, "/", async (homePage) => {
+      const connectButton = homePage.locator("[data-connect]");
+      await expect(connectButton).toBeVisible();
 
-    try {
-      await page.goto("/", { waitUntil: "domcontentloaded" });
-    } catch {
-      await page.goto("/").catch(() => {});
-    }
-    await expect(page.locator("body")).toBeVisible();
+      const criticalErrors = globalErrors.filter(
+        (error) =>
+          (error.includes("is not defined") ||
+            error.includes("Cannot read properties of undefined") ||
+            error.includes("TypeError:") ||
+            error.includes("ReferenceError:")) &&
+          !error.includes("Astro") &&
+          !error.includes("dev-toolbar") &&
+          !error.includes("Failed to fetch") &&
+          !error.includes("Outdated Optimize Dep"),
+      );
 
-    // Connect button should be present
-    const connectButton = page.locator("[data-connect]");
-    await expect(connectButton).toBeVisible();
+      if (criticalErrors.length > 0) {
+        console.error("JavaScript errors found:", criticalErrors);
+      }
+      expect(criticalErrors).toHaveLength(0);
+      expect(jsErrors).toHaveLength(0);
+    });
 
-    // Wait for page to fully hydrate and check for JavaScript errors
-    await page.waitForTimeout(1000);
+    await withMockedPage(page, "/governance", async () => {
+      const navErrors = globalErrors.filter(
+        (error) =>
+          error.includes("is not defined") ||
+          error.includes("Cannot read properties of undefined"),
+      );
+      expect(navErrors).toHaveLength(0);
+    });
 
-    // CRITICAL: No JavaScript errors should occur on page load
-    const criticalErrors = globalErrors.filter(
-      (error) =>
-        (error.includes("is not defined") ||
-          error.includes("Cannot read properties of undefined") ||
-          error.includes("TypeError:") ||
-          error.includes("ReferenceError:")) &&
-        !error.includes("Astro") && // Ignore Astro dev toolbar issues
-        !error.includes("dev-toolbar") &&
-        !error.includes("Failed to fetch") && // Network errors in dev toolbar
-        !error.includes("Outdated Optimize Dep"), // Vite dev-server cache churn
-    );
-
-    if (criticalErrors.length > 0) {
-      console.error("JavaScript errors found:", criticalErrors);
-    }
-    expect(criticalErrors).toHaveLength(0);
-    expect(jsErrors).toHaveLength(0);
-
-    // Navigation should work without errors
-    try {
-      await page.goto("/governance", { waitUntil: "domcontentloaded" });
-    } catch {
-      await page.goto("/governance").catch(() => {});
-    }
-    await expect(page.locator("body")).toBeVisible();
-    await page.waitForTimeout(500);
-
-    // Check errors after navigation
-    const navErrors = globalErrors.filter(
-      (error) =>
-        error.includes("is not defined") ||
-        error.includes("Cannot read properties of undefined"),
-    );
-    expect(navErrors).toHaveLength(0);
-
-    try {
-      await page.goto("/project?name=test", { waitUntil: "domcontentloaded" });
-    } catch {
-      await page.goto("/project?name=test").catch(() => {});
-    }
-    await expect(page.locator("body")).toBeVisible();
-    await page.waitForTimeout(500);
-
-    // Check errors after project page load
-    const projectErrors = globalErrors.filter(
-      (error) =>
-        error.includes("is not defined") ||
-        error.includes("Invalid contract ID: undefined"),
-    );
-    expect(projectErrors).toHaveLength(0);
+    await withMockedPage(page, "/project?name=test", async () => {
+      const projectErrors = globalErrors.filter(
+        (error) =>
+          error.includes("is not defined") ||
+          error.includes("Invalid contract ID: undefined"),
+      );
+      expect(projectErrors).toHaveLength(0);
+    });
   });
 
   test("Environment variables are properly configured", async ({ page }) => {
     await applyAllMocks(page);
 
-    try {
-      await page.goto("/", { waitUntil: "domcontentloaded" });
-    } catch {
-      await page.goto("/").catch(() => {});
-    }
+    await page.goto("/", { waitUntil: "domcontentloaded" }).catch(() => {});
     await page.waitForTimeout(500);
 
     // Check for specific contract initialization errors using our global tracking
@@ -140,11 +154,9 @@ test.describe("Essential Production Validation", () => {
     expect(criticalErrors).toHaveLength(0);
 
     // Try to open project page which requires contract service
-    try {
-      await page.goto("/project?name=test", { waitUntil: "domcontentloaded" });
-    } catch {
-      await page.goto("/project?name=test").catch(() => {});
-    }
+    await page
+      .goto("/project?name=test", { waitUntil: "domcontentloaded" })
+      .catch(() => {});
     await page.waitForTimeout(500);
 
     // Should not have contract ID errors
@@ -223,15 +235,13 @@ test.describe("Essential Production Validation", () => {
       "/project?name=%3Cscript%3Ealert%28%27xss%27%29%3C%2Fscript%3E",
       { waitUntil: "domcontentloaded" },
     );
-    await expect(page.locator("body")).toBeVisible();
+    await expect(page.locator("[data-connect]")).toBeVisible({
+      timeout: 5000,
+    });
 
     // Network failure resilience
     await page.route("**/soroban/**", (route) => route.abort());
-    try {
-      await page.goto("/", { waitUntil: "domcontentloaded" });
-    } catch {
-      await page.goto("/").catch(() => {});
-    }
+    await page.goto("/", { waitUntil: "domcontentloaded" }).catch(() => {});
     await expect(page.locator("[data-connect]")).toBeVisible();
 
     // No critical environment errors
@@ -303,62 +313,44 @@ test.describe("Essential Production Validation", () => {
   });
 
   test("Critical Component Error Detection", async ({ page }) => {
-    await applyAllMocks(page);
+    await withMockedPage(page, "/project?name=tansu", async () => {
+      const joinButtonErrors = globalErrors.filter(
+        (error) =>
+          error.includes("setShowProfileModal is not defined") ||
+          error.includes("setIsMember is not defined") ||
+          error.includes("setMemberData is not defined"),
+      );
 
-    // Test specific components that we know had issues
-    try {
-      await page.goto("/project?name=tansu");
-    } catch {
-      await page.goto("/project?name=tansu").catch(() => {});
-    }
-    await page.waitForTimeout(1500); // Give time for all components to load
+      if (joinButtonErrors.length > 0) {
+        console.error("JoinCommunityButton errors found:", joinButtonErrors);
+      }
+      expect(joinButtonErrors).toHaveLength(0);
 
-    // JoinCommunityButton specifically should not have undefined errors
-    const joinButtonErrors = globalErrors.filter(
-      (error) =>
-        error.includes("setShowProfileModal is not defined") ||
-        error.includes("setIsMember is not defined") ||
-        error.includes("setMemberData is not defined"),
-    );
-
-    if (joinButtonErrors.length > 0) {
-      console.error("JoinCommunityButton errors found:", joinButtonErrors);
-    }
-    expect(joinButtonErrors).toHaveLength(0);
-
-    // Test that we can interact with contract-related elements without crashes
-    const contractElements = await page
-      .locator(
-        '[data-testid*="contract"], [data-testid*="hash"], [data-testid*="update"]',
-      )
-      .count();
-    if (contractElements > 0) {
-      // If contract elements exist, no contract ID errors should occur
+      // Check for contract ID errors regardless of element presence
       const contractIdErrors = globalErrors.filter((error) =>
         error.includes("Invalid contract ID: undefined"),
       );
       expect(contractIdErrors).toHaveLength(0);
-    }
 
-    // Check all page JavaScript errors are acceptable
-    const unacceptableErrors = globalErrors.filter(
-      (error) =>
-        (error.includes("is not defined") ||
-          error.includes("Cannot read properties of undefined") ||
-          (error.includes("TypeError") && !error.includes("network")) ||
-          (error.includes("ReferenceError") && !error.includes("mock"))) &&
-        !error.includes("Astro") && // Ignore Astro dev toolbar issues
-        !error.includes("dev-toolbar") &&
-        !error.includes("Failed to fetch"), // Network errors in dev toolbar
-    );
-
-    if (unacceptableErrors.length > 0) {
-      console.error(
-        "Unacceptable JavaScript errors found:",
-        unacceptableErrors,
+      const unacceptableErrors = globalErrors.filter(
+        (error) =>
+          (error.includes("is not defined") ||
+            error.includes("Cannot read properties of undefined") ||
+            (error.includes("TypeError") && !error.includes("network")) ||
+            (error.includes("ReferenceError") && !error.includes("mock"))) &&
+          !error.includes("Astro") &&
+          !error.includes("dev-toolbar") &&
+          !error.includes("Failed to fetch"),
       );
-    }
-    expect(unacceptableErrors).toHaveLength(0);
+
+      if (unacceptableErrors.length > 0) {
+        console.error(
+          "Unacceptable JavaScript errors found:",
+          unacceptableErrors,
+        );
+      }
+      expect(unacceptableErrors).toHaveLength(0);
+    });
   });
 
   test("Mobile responsiveness and performance", async ({ page }) => {

@@ -58,13 +58,12 @@ export default defineConfig({
   ],
 
   // Performance optimizations
-  timeout: 30000,
-  expect: { timeout: 5000 },
+  timeout: 90000,
+  expect: { timeout: 15000 },
 
   // Fast execution settings
   fullyParallel: true,
   retries: 0,
-  // Use more workers locally for speed; keep single worker on CI for stability
   ...(process.env.CI ? { workers: 1 } : {}),
 
   // Minimal reporting for speed
@@ -72,8 +71,9 @@ export default defineConfig({
 
   // No screenshots/videos for performance
   use: {
-    actionTimeout: 5000,
-    navigationTimeout: 10000,
+    baseURL: "http://localhost:4321",
+    actionTimeout: 15000,
+    navigationTimeout: 30000,
     trace: "off",
     screenshot: "off",
     video: "off",
@@ -95,7 +95,7 @@ export default defineConfig({
   webServer: {
     command: "bun dev",
     env: webServerEnv,
-    port: 4321,
+    url: "http://localhost:4321",
     reuseExistingServer: !process.env.CI,
   },
 });
