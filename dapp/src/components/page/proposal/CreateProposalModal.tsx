@@ -7,7 +7,7 @@ import Label from "components/utils/Label";
 import FlowProgressModal from "components/utils/FlowProgressModal";
 import Step from "components/utils/Step";
 import Title from "components/utils/Title";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProposalOutcome, OutcomeContract } from "types/proposal";
 import { formatDate } from "utils/formatTimeFunctions";
 import { connectedPublicKey } from "utils/store";
@@ -36,6 +36,20 @@ const CreateProposalModal = () => {
   // Local image handling for Markdown content
   const [imageFiles, setImageFiles] = useState<AttachedImage[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
+
+  // Keep a ref to the latest attached images so we can revoke their object URLs
+  // only when the component truly unmounts — NOT on modal close. Revoking on
+  // close (while the description markdown still references the blob: URLs) is
+  // what made images appear broken after reopening the modal (issue #177).
+  const imageFilesRef = useRef<AttachedImage[]>([]);
+  useEffect(() => {
+    imageFilesRef.current = imageFiles;
+  }, [imageFiles]);
+  useEffect(() => {
+    return () => {
+      imageFilesRef.current.forEach((img) => URL.revokeObjectURL(img.localUrl));
+    };
+  }, []);
 
   const [approveDescription, setApproveDescription] = useState("");
   const [rejectDescription, setRejectDescription] = useState("");
@@ -486,8 +500,9 @@ const CreateProposalModal = () => {
   };
 
   const handleCloseModal = () => {
-    imageFiles.forEach((img) => URL.revokeObjectURL(img.localUrl));
-    setImageFiles([]);
+    // Preserve the draft (description markdown + attached images + their live
+    // blob: URLs) so reopening the modal shows the images correctly. Object URLs
+    // are revoked on unmount instead (see effect above). Fixes issue #177.
     setShowModal(false);
     setStep(1);
   };

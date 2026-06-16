@@ -139,7 +139,17 @@ const MarkdownEditorWithImages = ({
                       onImageFilesChange(
                         imageFiles.filter((_, i) => i !== idx),
                       );
-                      onChange(value.replaceAll(img.localUrl, ""));
+                      // Remove the whole markdown image node(s) for this URL, not
+                      // just the URL substring, so no empty `![]()` is left behind.
+                      const escaped = img.localUrl.replace(
+                        /[.*+?^${}()|[\]\\]/g,
+                        "\\$&",
+                      );
+                      const imageTag = new RegExp(
+                        `!\\[[^\\]]*\\]\\(${escaped}\\)\\n?`,
+                        "g",
+                      );
+                      onChange(value.replace(imageTag, ""));
                     }}
                   >
                     Remove
