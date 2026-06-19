@@ -5,21 +5,8 @@ export function parseContractError(error: any): string {
   const errorMessage = error.message || error.toString();
 
   const errorMatch = errorMessage.match(/Error\(Contract, #(\d+)\)/);
-  if (errorMatch && errorMatch[1]) {
+  if (errorMatch) {
     const errorCode = parseInt(errorMatch[1]);
-    const parsedErrorMessage =
-      contractErrorMessages[errorCode as keyof typeof contractErrorMessages];
-    if (parsedErrorMessage) {
-      return parsedErrorMessage;
-    }
-    return `Contract error #${errorCode}`;
-  }
-
-  const hostErrorMatch = errorMessage.match(
-    /HostError: Error\(Contract, #(\d+)\)/,
-  );
-  if (hostErrorMatch && hostErrorMatch[1]) {
-    const errorCode = parseInt(hostErrorMatch[1]);
     const parsedErrorMessage =
       contractErrorMessages[errorCode as keyof typeof contractErrorMessages];
     if (parsedErrorMessage) {
