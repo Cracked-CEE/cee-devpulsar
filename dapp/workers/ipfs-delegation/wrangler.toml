@@ -3,15 +3,44 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Rate limit / abuse-prevention budgets. All are plain (non-secret) vars so
+# they can be tuned per environment without touching wrangler secrets.
+# See README.md "Rate Limiting" section for what each one controls.
+[vars]
+MAX_CAR_BYTES = "26214400"
+RATE_LIMIT_WINDOW_SECONDS = "3600"
+IP_RATE_LIMIT_MAX_REQUESTS = "20"
+IP_RATE_LIMIT_MAX_BYTES = "209715200"
+ACCOUNT_RATE_LIMIT_MAX_REQUESTS = "10"
+ACCOUNT_RATE_LIMIT_MAX_BYTES = "104857600"
+
+# Local `wrangler dev` simulates this KV namespace automatically; no real
+# Cloudflare namespace is required for local development.
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "local-dev-rate-limit-kv"
+
 [env.testnet]
 [[env.testnet.routes]]
 pattern = "ipfs-testnet.tansu.dev"
 custom_domain = true
 
+# Replace with the id printed by:
+#   bunx wrangler kv namespace create RATE_LIMIT_KV --env testnet
+[[env.testnet.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_TESTNET_KV_NAMESPACE_ID"
+
 [env.production]
 [[env.production.routes]]
 pattern = "ipfs.tansu.dev"
 custom_domain = true
+
+# Replace with the id printed by:
+#   bunx wrangler kv namespace create RATE_LIMIT_KV --env production
+[[env.production.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_PRODUCTION_KV_NAMESPACE_ID"
 
 [observability]
 enabled = true

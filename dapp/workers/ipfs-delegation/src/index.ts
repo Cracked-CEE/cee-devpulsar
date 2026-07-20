@@ -9,8 +9,13 @@
 
 import { Keypair, Networks, Transaction } from "@stellar/stellar-sdk";
 import { CarReader } from "@ipld/car";
+import {
+  authorizeUpload,
+  loadRateLimitConfig,
+  type RateLimitEnv,
+} from "./rateLimit";
 
-export interface Env {
+export interface Env extends RateLimitEnv {
   FILEBASE_TOKEN: string;
   PINATA_JWT?: string;
   PINATA_GROUP_ID?: string;
@@ -80,7 +85,7 @@ function validateUploadRequest(body: UploadRequest): void {
   }
 }
 
-export function validateSignedTransaction(signedTxXdr: string): void {
+export function validateSignedTransaction(signedTxXdr: string): string {
   const passphrases = [Networks.TESTNET, Networks.PUBLIC];
   let verifiedTransaction: Transaction | null = null;
 
@@ -116,6 +121,8 @@ export function validateSignedTransaction(signedTxXdr: string): void {
   if (!verifiedTransaction.operations?.length) {
     throw new Error("Transaction must have at least one operation");
   }
+
+  return verifiedTransaction.source;
 }
 
 export async function calculateCidFromCar(carBlob: Blob): Promise<string> {
@@ -183,11 +190,57 @@ export default {
       );
     }
 
+    const rateLimitConfig = loadRateLimitConfig(env);
+
+    // Reject oversized requests from the Content-Length header before
+    // buffering/parsing the body. Base64 + JSON framing inflate the raw
+    // CAR size by roughly 4/3, so allow generous headroom on top of that.
+    const declaredLength = Number(request.headers.get("Content-Length"));
+    if (
+      Number.isFinite(declaredLength) &&
+      declaredLength > rateLimitConfig.maxCarBytes * 2
+    ) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `CAR payload exceeds maximum allowed size of ${rateLimitConfig.maxCarBytes} bytes`,
+        }),
+        {
+          status: 413,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+
     let body: UploadRequest;
+    let sourceAccount: string;
     try {
       body = (await request.json()) as UploadRequest;
       validateUploadRequest(body);
-      validateSignedTransaction(body.signedTxXdr);
+
+      // Cheap upper-bound check on the declared payload before spending CPU
+      // on signature verification or base64 decoding.
+      const estimatedBytes = Math.floor((body.car.length * 3) / 4);
+      if (estimatedBytes > rateLimitConfig.maxCarBytes) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `CAR payload exceeds maximum allowed size of ${rateLimitConfig.maxCarBytes} bytes`,
+          }),
+          {
+            status: 413,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      }
+
+      sourceAccount = validateSignedTransaction(body.signedTxXdr);
     } catch (error: any) {
       return new Response(
         JSON.stringify({
@@ -216,6 +269,47 @@ export default {
           },
         },
       );
+    }
+
+    if (carBlob.size > rateLimitConfig.maxCarBytes) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `CAR payload exceeds maximum allowed size of ${rateLimitConfig.maxCarBytes} bytes`,
+        }),
+        {
+          status: 413,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+
+    const callerIp = request.headers.get("CF-Connecting-IP") ?? "unknown";
+    const rateLimitResult = await authorizeUpload(
+      env.RATE_LIMIT_KV,
+      { ip: callerIp, accountId: sourceAccount },
+      carBlob.size,
+      rateLimitConfig,
+    );
+
+    if (!rateLimitResult.allowed) {
+      const status = rateLimitResult.reason === "storage_unavailable" ? 503 : 429;
+      const error =
+        rateLimitResult.reason === "storage_unavailable"
+          ? "Upload service temporarily unavailable"
+          : "Rate limit exceeded. Try again later.";
+
+      return new Response(JSON.stringify({ success: false, error }), {
+        status,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Retry-After": String(rateLimitResult.retryAfterSeconds),
+        },
+      });
     }
 
     let calculatedCid: string;
