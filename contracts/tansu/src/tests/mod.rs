@@ -5,4 +5,5 @@ pub mod test_dao;
 pub mod test_membership;
 pub mod test_pause_upgrade;
 pub mod test_register;
+pub mod test_tally_differential;
 pub mod test_utils;

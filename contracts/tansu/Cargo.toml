@@ -13,3 +13,7 @@ soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils", "experimental_spec_shaking_v2"] }
+# Test-only: parse the shared cross-implementation scenarios (dapp/tests/differential/scenarios.json)
+# consumed by test_tally_differential.rs. Not part of the deployed wasm.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

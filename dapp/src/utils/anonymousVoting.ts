@@ -9,6 +9,10 @@ import type { VoteStatus } from "types/proposal";
 import { VoteType } from "types/proposal";
 import { decryptWithPrivateKey } from "utils/crypto";
 import { parseContractError } from "utils/contractErrors";
+import {
+  accumulateAnonymousTally,
+  decodeAnonymousValue,
+} from "utils/anonymousTally";
 import { Badge } from "../../packages/tansu/dist";
 // Lazy-loaded imports to avoid circular dependency issues in Astro/SSR
 async function getTansu() {
@@ -118,10 +122,9 @@ export async function computeAnonymousVotingData(
     };
   }
 
-  // Init accumulators (BigInt to avoid precision loss for u128 values)
-  const talliesArr: bigint[] = [0n, 0n, 0n];
-  const seedsArr: bigint[] = [0n, 0n, 0n];
-  const voteCounts = [0, 0, 0];
+  // Decoded per-voter data; the weighted tallies/seeds are accumulated after
+  // the loop by the shared kernel (utils/anonymousTally) so this client and the
+  // differential harness exercise the exact same accumulation.
   const decodedPerVoter: DecodedVote[] = [];
 
   for (const vote of votes) {
@@ -179,21 +182,18 @@ export async function computeAnonymousVotingData(
       const sCipher = encryptedSeeds[i];
       if (!vCipher || !sCipher) continue;
 
-      // Decrypt (or parse plain numbers for default votes)
-      const vDec = isPlainNumber(vCipher)
-        ? parseInt(vCipher)
-        : parseInt(
-            (await decryptWithPrivateKey(vCipher, privateKey))
-              .split(":")
-              .pop()!,
-          );
-      const sDec = isPlainNumber(sCipher)
-        ? parseInt(sCipher)
-        : parseInt(
-            (await decryptWithPrivateKey(sCipher, privateKey))
-              .split(":")
-              .pop()!,
-          );
+      // Decrypt (or parse plain numbers for default votes). Decoding is shared
+      // with the tally kernel via decodeAnonymousValue.
+      const vDec = decodeAnonymousValue(
+        isPlainNumber(vCipher)
+          ? vCipher
+          : await decryptWithPrivateKey(vCipher, privateKey),
+      );
+      const sDec = decodeAnonymousValue(
+        isPlainNumber(sCipher)
+          ? sCipher
+          : await decryptWithPrivateKey(sCipher, privateKey),
+      );
 
       // Store all outcome weights and seeds
       outcomeWeights[i] = vDec;
@@ -201,11 +201,6 @@ export async function computeAnonymousVotingData(
 
       if (vDec > 0) voteChoiceIdx = i;
       if (vDec > 0) selectedSeedRaw = sDec; // capture per-voter unweighted seed for display
-
-      // Apply voting weight to both vote value and seed (BigInt for exact u128)
-      talliesArr[i]! += BigInt(vDec) * BigInt(weight);
-      seedsArr[i]! += BigInt(sDec) * BigInt(weight);
-      if (vDec > 0) voteCounts[i]! += 1;
     }
 
     decodedPerVoter.push({
@@ -229,6 +224,19 @@ export async function computeAnonymousVotingData(
   if (decodedPerVoter.length === 0) {
     throw new Error("Key file does not match any encrypted votes");
   }
+
+  // Weighted scalar tally (BigInt, exact for u128) via the shared kernel.
+  const {
+    tallies: talliesArr,
+    seeds: seedsArr,
+    voteCounts,
+  } = accumulateAnonymousTally(
+    decodedPerVoter.map((v) => ({
+      weight: v.weight,
+      voteValues: v.outcomeWeights,
+      seedValues: v.outcomeSeeds,
+    })),
+  );
 
   // Build VoteStatus object used by UI components (Number for display only)
   const voteStatus: VoteStatus = {

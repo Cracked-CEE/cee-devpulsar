@@ -1,0 +1,40 @@
+name: Test dApp
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    paths:
+      - 'dapp/**'
+      # The differential harness is validated on both sides; re-run the dApp
+      # side when the contract's tally/commitment logic changes too.
+      - 'contracts/tansu/src/contract_dao.rs'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dApp dependencies
+        run: cd dapp && bun install --frozen-lockfile
+
+      # Unit suite + the cross-implementation tally differential
+      # (tests/differential/tallyDifferential.test.ts). The contract side of the
+      # differential runs under cargo test in contract.yml against the same
+      # dapp/tests/differential/scenarios.json.
+      - name: Run unit and differential tests
+        run: cd dapp && bun run test:unit
