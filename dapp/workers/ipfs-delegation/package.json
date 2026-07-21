@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "wrangler dev --port 8787",
     "test": "bun test-upload.js",
+    "test:load": "bun load-test.js",
+    "test:unit": "vitest run",
     "deploy:testnet": "wrangler deploy --env testnet",
     "deploy:production": "wrangler deploy --env production"
   },
@@ -16,7 +18,9 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260511.1",
+    "dotenv": "^17.4.2",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.8",
     "wrangler": "^4.90.0"
   },
   "overrides": {
