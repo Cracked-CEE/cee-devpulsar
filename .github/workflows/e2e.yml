@@ -22,10 +22,14 @@ jobs:
     timeout-minutes: 30
 
     env:
+      # Default to a local Soroban quickstart in CI. This workflow will
+      # start the docker-compose `testnet` service and deploy the contracts
+      # to the local node. If you prefer the remote testnet, override these
+      # environment variables in the workflow dispatch.
       PUBLIC_DELEGATION_API_URL: "https://ipfs-testnet.tansu.dev"
-      PUBLIC_SOROBAN_RPC_URL: "https://soroban-testnet.stellar.org:443"
-      PUBLIC_SOROBAN_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
-      PUBLIC_HORIZON_URL: "https://horizon-testnet.stellar.org"
+      PUBLIC_SOROBAN_RPC_URL: "http://localhost:8000/soroban/rpc"
+      PUBLIC_SOROBAN_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
+      PUBLIC_HORIZON_URL: "http://localhost:8000"
       PUBLIC_TANSU_CONTRACT_ID: "CTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
       PUBLIC_TANSU_OWNER_ID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
       CI: "true"
@@ -84,6 +88,32 @@ jobs:
 
       - name: Setup environment variables
         run: cp .env.example .env
+
+      - name: Start local Soroban quickstart
+        run: docker compose up -d testnet
+
+      - name: Wait for Soroban RPC to become available
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/ >/dev/null 2>&1; then
+              echo "Soroban RPC available" && exit 0
+            fi
+            sleep 1
+          done
+          echo "Timed out waiting for Soroban RPC" && exit 1
+
+      - name: Install Rust and stellar-cli
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup target add wasm32v1-none
+          cargo install --locked stellar-cli
+
+      - name: Build and deploy contracts to local node
+        run: |
+          make contract_build
+          make contract_bindings network=testnet-local
+          make contract_deploy network=testnet-local
 
       - name: Build application
         run: bun run build
