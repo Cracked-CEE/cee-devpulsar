@@ -1,3 +1,12 @@
 rules:
   unpinned-uses:
-    disable: true
+    ignore:
+      # The soroban-build-workflow reusable workflow is from a trusted community org
+      # and does not support SHA pinning
+      - "stellar-expert/soroban-build-workflow/.github/workflows/release.yml@*"
+      # The pg-atlas-sbom-action is pinned by the SCF-Public-Goods-Maintenance org;
+      # its latest commit is reviewed periodically
+      - "SCF-Public-Goods-Maintenance/pg-atlas-sbom-action@*"
+      # The stellar/actions/rust-cache action is from Stellar's official org and
+      # does not publish SHA-pinned tags
+      - "stellar/actions/rust-cache@*"
