@@ -1,0 +1,93 @@
+{
+  "$comment": [
+    "Canonical, cross-implementation vote scenarios for the tally differential harness.",
+    "This file is the SINGLE SOURCE OF TRUTH consumed by BOTH sides:",
+    "  - TypeScript: dapp/tests/differential/tallyDifferential.test.ts (client accumulation)",
+    "  - Rust:       contracts/tansu/src/tests/test_tally_differential.rs (real contract proof())",
+    "Each voter has a weight and three per-outcome (approve, reject, abstain) vote and seed values.",
+    "Real anonymous ballots are one-hot in `votes` (exactly one 1), but the tally algebra is linear",
+    "so a few non-one-hot cases are included to exercise the pure accumulation. Values here MUST stay",
+    "within the documented contract-valid range (see differential-tally-spec.md): weight is u32,",
+    "seeds are 32-bit (matching ContractService's crypto.getRandomValues(Uint32Array)), <= 40 voters."
+  ],
+  "specVersion": "tansu-2.0.2",
+  "scenarios": [
+    {
+      "name": "single_voter_approve",
+      "note": "Smallest non-trivial ballot: one approver, weight 1.",
+      "voters": [{ "weight": 1, "votes": [1, 0, 0], "seeds": [11, 0, 0] }]
+    },
+    {
+      "name": "single_voter_max_weight",
+      "note": "weight = maxWeight (Badge.Developer = 10_000_000), historically fragile (VoterWeight).",
+      "voters": [
+        { "weight": 10000000, "votes": [1, 0, 0], "seeds": [4294967295, 0, 0] }
+      ]
+    },
+    {
+      "name": "weight_zero_only",
+      "note": "All voters have weight 0 (e.g. lone auto-abstain proposer). Every tally must be 0.",
+      "voters": [{ "weight": 0, "votes": [0, 0, 1], "seeds": [0, 0, 0] }]
+    },
+    {
+      "name": "all_abstain",
+      "note": "Everyone abstains -> approve/reject tallies are 0, proposal Cancelled.",
+      "voters": [
+        { "weight": 3, "votes": [0, 0, 1], "seeds": [7, 8, 9] },
+        { "weight": 5, "votes": [0, 0, 1], "seeds": [1, 2, 3] }
+      ]
+    },
+    {
+      "name": "mixed_three_voters_approved",
+      "note": "Approve supermajority over reject+abstain.",
+      "voters": [
+        { "weight": 7, "votes": [1, 0, 0], "seeds": [101, 0, 0] },
+        { "weight": 2, "votes": [0, 1, 0], "seeds": [0, 55, 0] },
+        { "weight": 1, "votes": [0, 0, 1], "seeds": [0, 0, 9] }
+      ]
+    },
+    {
+      "name": "mixed_three_voters_rejected",
+      "note": "Reject supermajority.",
+      "voters": [
+        { "weight": 2, "votes": [1, 0, 0], "seeds": [3, 0, 0] },
+        { "weight": 9, "votes": [0, 1, 0], "seeds": [0, 40, 0] },
+        { "weight": 1, "votes": [0, 0, 1], "seeds": [0, 0, 1] }
+      ]
+    },
+    {
+      "name": "tie_cancelled",
+      "note": "approve == reject, no supermajority -> Cancelled.",
+      "voters": [
+        { "weight": 4, "votes": [1, 0, 0], "seeds": [12, 0, 0] },
+        { "weight": 4, "votes": [0, 1, 0], "seeds": [0, 34, 0] }
+      ]
+    },
+    {
+      "name": "non_one_hot_weighted",
+      "note": "Non-one-hot vote values (mirrors test_dao.rs dao_anonymous) to exercise linear accumulation.",
+      "voters": [{ "weight": 3, "votes": [3, 1, 1], "seeds": [5, 4, 6] }]
+    },
+    {
+      "name": "max_seed_32bit_full_slate",
+      "note": "Seeds at the 32-bit ceiling (u32::MAX) across a full 3-way split; stresses seed accumulation.",
+      "voters": [
+        {
+          "weight": 6,
+          "votes": [1, 0, 0],
+          "seeds": [4294967295, 4294967295, 4294967295]
+        },
+        {
+          "weight": 6,
+          "votes": [0, 1, 0],
+          "seeds": [4294967295, 4294967295, 4294967295]
+        },
+        {
+          "weight": 6,
+          "votes": [0, 0, 1],
+          "seeds": [4294967295, 4294967295, 4294967295]
+        }
+      ]
+    }
+  ]
+}

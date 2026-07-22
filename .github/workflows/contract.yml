@@ -9,6 +9,9 @@ on:
   pull_request:
     paths:
       - 'contracts/**'
+      # Shared source of truth for the tally differential (test_tally_differential.rs
+      # include_str!s it); re-run the contract side when scenarios change.
+      - 'dapp/tests/differential/scenarios.json'
 
   workflow_dispatch:
 #  schedule:

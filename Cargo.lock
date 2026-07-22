@@ -1588,6 +1588,8 @@ dependencies = [
 name = "tansu"
 version = "2.0.2"
 dependencies = [
+ "serde",
+ "serde_json",
  "soroban-sdk",
 ]
 
