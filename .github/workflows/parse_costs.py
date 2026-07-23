@@ -1,6 +1,9 @@
+import argparse
+import json
 import re
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 
 def extract_summary_from_stream(stream):
@@ -121,8 +124,110 @@ def generate_markdown(cpu_measurements, mem_measurements, operation_costs):
     return "\n".join(lines)
 
 
-if __name__ == "__main__":
+def enforce_cost_budget(
+    baseline_costs: dict[str, dict],
+    pr_costs: dict[str, dict],
+    threshold_pct: float = 5.0,
+) -> list[str]:
+    """Compare pr_costs against baseline_costs per entrypoint and return a list of
+    human-readable regressions that exceed threshold_pct. Entrypoints present in
+    pr_costs but absent from baseline_costs (new entrypoints) are skipped here —
+    callers should report those separately as informational, not as regressions.
+    """
+    regressions = []
+
+    for entrypoint in sorted(pr_costs):
+        baseline = baseline_costs.get(entrypoint)
+        if baseline is None:
+            continue
+
+        pr = pr_costs[entrypoint]
+        for metric in ("cpu", "mem"):
+            base_val = baseline.get(metric, 0)
+            pr_val = pr.get(metric, 0)
+            if base_val <= 0:
+                continue
+
+            pct_change = ((pr_val - base_val) / base_val) * 100
+            if pct_change > threshold_pct:
+                regressions.append(
+                    f"`{entrypoint}` {metric} usage regressed by {pct_change:.1f}% "
+                    f"(baseline: {base_val:,}, pr: {pr_val:,}, "
+                    f"allowed threshold: {threshold_pct:.1f}%)"
+                )
+
+    return regressions
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        default=None,
+        help="Path to a baseline costs JSON file to compare against. If omitted "
+        "or the file doesn't exist, budget enforcement is skipped (bootstrap run).",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=5.0,
+        help="Allowed regression percentage before a cost is flagged (default: 5.0)",
+    )
+    parser.add_argument(
+        "--write-costs",
+        type=Path,
+        default=None,
+        help="Write the parsed per-entrypoint costs from this run to a JSON file "
+        "(e.g. to publish as next run's baseline).",
+    )
+    args = parser.parse_args()
+
     cpu_measurements, mem_measurements, operation_costs = extract_summary_from_stream(
         sys.stdin
     )
+    pr_costs = {op: dict(costs) for op, costs in operation_costs.items()}
+
     print(generate_markdown(cpu_measurements, mem_measurements, operation_costs))
+
+    if args.write_costs:
+        args.write_costs.write_text(json.dumps(pr_costs, indent=2, sort_keys=True))
+
+    if not args.baseline:
+        return 0
+
+    if not args.baseline.exists():
+        print("\n## 💰 Cost Budget Enforcement\n")
+        print(
+            "ℹ️ No baseline available yet — skipping regression enforcement "
+            "(this looks like a bootstrap run)."
+        )
+        return 0
+
+    baseline_costs = json.loads(args.baseline.read_text())
+    new_entrypoints = sorted(set(pr_costs) - set(baseline_costs))
+    regressions = enforce_cost_budget(baseline_costs, pr_costs, args.threshold)
+
+    print("\n## 💰 Cost Budget Enforcement\n")
+
+    if new_entrypoints:
+        print(
+            "ℹ️ New entrypoint(s) with no baseline yet (informational only, "
+            f"not evaluated as regressions): {', '.join(new_entrypoints)}\n"
+        )
+
+    if regressions:
+        print(
+            f"❌ **{len(regressions)} cost regression(s) exceeded the "
+            f"{args.threshold:.1f}% threshold:**\n"
+        )
+        for regression in regressions:
+            print(f"- {regression}")
+        return 1
+
+    print(f"✅ No cost regressions beyond the {args.threshold:.1f}% threshold.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

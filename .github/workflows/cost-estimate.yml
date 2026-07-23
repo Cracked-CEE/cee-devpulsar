@@ -4,17 +4,20 @@ permissions:
   contents: read
   pull-requests: write
   checks: write
+  actions: read
 
 on:
   pull_request:
     paths:
       - 'contracts/**'
       - '.github/workflows/cost-estimate.yml'
+      - '.github/workflows/parse_costs.py'
   push:
     branches: [ main ]
     paths:
       - 'contracts/**'
       - '.github/workflows/cost-estimate.yml'
+      - '.github/workflows/parse_costs.py'
   workflow_dispatch:
 
 concurrency:
@@ -25,6 +28,7 @@ env:
   RUSTFLAGS: -C debuginfo=0
   RUST_BACKTRACE: 1
   CARGO_TERM_COLOR: always
+  COST_THRESHOLD_PCT: "5.0"
 
 jobs:
   cost-estimate:
@@ -44,6 +48,32 @@ jobs:
           components: rustfmt, clippy
           target: wasm32-unknown-unknown
 
+      - name: Test cost budget enforcement logic
+        run: python3 -m unittest test_parse_costs -v
+        working-directory: .github/workflows
+
+      - name: Download baseline costs from latest successful main run
+        if: github.event_name == 'pull_request'
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow cost-estimate.yml \
+            --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+
+          if [ -z "$RUN_ID" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No prior successful cost-estimate run on main yet; skipping baseline comparison."
+            exit 0
+          fi
+
+          if gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" -n cost-baseline -D /tmp/cost-baseline; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "Latest successful main run has no cost-baseline artifact; skipping baseline comparison."
+          fi
+
       - name: Run and parse cost estimate tests
         id: cost-test
         run: |
@@ -52,35 +82,44 @@ jobs:
           set +e
           cd contracts/tansu
           OUTPUT=$(cargo test test_cost_ -- --show-output 2>&1)
+          CARGO_EXIT_CODE=$?
           echo "$OUTPUT"
-          echo "$OUTPUT" | python3 ../../.github/workflows/parse_costs.py >> $GITHUB_STEP_SUMMARY
-          TEST_EXIT_CODE=$?
+
+          BASELINE_ARGS=()
+          if [ "${{ steps.baseline.outputs.found }}" == "true" ]; then
+            BASELINE_ARGS+=(--baseline /tmp/cost-baseline/costs.json)
+          fi
+
+          echo "$OUTPUT" | python3 ../../.github/workflows/parse_costs.py \
+            --threshold "$COST_THRESHOLD_PCT" \
+            --write-costs /tmp/costs.json \
+            "${BASELINE_ARGS[@]}" >> $GITHUB_STEP_SUMMARY
+          PARSE_EXIT_CODE=$?
           set -e
 
-          echo "test_exit_code=$TEST_EXIT_CODE" >> $GITHUB_OUTPUT
+          echo "cargo_exit_code=$CARGO_EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "parse_exit_code=$PARSE_EXIT_CODE" >> "$GITHUB_OUTPUT"
 
-          if git diff --quiet; then
-            echo "snapshot_drift=false" >> $GITHUB_OUTPUT
-            echo "✅ No snapshot drift detected" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "snapshot_drift=true" >> $GITHUB_OUTPUT
-            echo "⚠️ Snapshot drift detected!" >> $GITHUB_STEP_SUMMARY
-            echo "### Changed Files:" >> $GITHUB_STEP_SUMMARY
-            git diff --name-only >> $GITHUB_STEP_SUMMARY
-          fi
+      - name: Upload costs as next baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.cost-test.outputs.cargo_exit_code == '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cost-baseline
+          path: /tmp/costs.json
+          retention-days: 90
 
       - name: Final check
         if: always()
         run: |
-          if [ "${STEPS_COST_TEST_OUTPUTS_TEST_EXIT_CODE}" != "0" ]; then
-            echo "❌ Tests failed"
+          if [ "${CARGO_EXIT_CODE}" != "0" ]; then
+            echo "❌ Cost estimate tests failed to run"
             exit 1
           fi
-          if [ "${STEPS_COST_TEST_OUTPUTS_SNAPSHOT_DRIFT}" == "true" ]; then
-            echo "⚠️ Snapshot drift detected – please review"
+          if [ "${PARSE_EXIT_CODE}" != "0" ]; then
+            echo "❌ Cost budget regression detected – see job summary for details"
             exit 1
           fi
           echo "✅ All tests passed"
         env:
-          STEPS_COST_TEST_OUTPUTS_TEST_EXIT_CODE: ${{ steps.cost-test.outputs.test_exit_code }}
-          STEPS_COST_TEST_OUTPUTS_SNAPSHOT_DRIFT: ${{ steps.cost-test.outputs.snapshot_drift }}
+          CARGO_EXIT_CODE: ${{ steps.cost-test.outputs.cargo_exit_code }}
+          PARSE_EXIT_CODE: ${{ steps.cost-test.outputs.parse_exit_code }}
