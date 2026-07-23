@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { GitLogService } from "../../../src/service/GitLogService";
 
 function sha(n: number): string {
   return "a" + "0".repeat(36) + String(n).padStart(3, "0");
@@ -175,5 +176,54 @@ describe("ContributionMetricsService.fetchMetrics", () => {
     expect(metrics.totalCommits).toBe(55);
     expect(metrics.totalContributors).toBe(3);
     expect(metrics.ponyFactor.factor).toBe(1);
+  });
+});
+
+describe("ContributionMetricsService.convertToGitLogFormat", () => {
+  // Regression test: every line of a multi-line commit message must be
+  // indented 4 spaces, matching real `git log` output, or GitLogService
+  // silently drops continuation lines (and any trailers on them) because
+  // parseCommitBlock only treats 4-space-indented lines as message body.
+  it("preserves every line of a multi-line commit message when round-tripped through GitLogService", () => {
+    const commits = [
+      makeCommit(
+        1,
+        "Alice",
+        "2026-01-15T10:00:00Z",
+        "feat: add feature\n\nThis is a longer description\nspanning several lines.\n\nCo-authored-by: Bob <bob@example.com>",
+      ),
+    ];
+
+    const gitLog = (ContributionMetricsService as any).convertToGitLogFormat(
+      commits,
+    );
+    const parsed = GitLogService.parseGitLog(gitLog);
+
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]!.message).toBe(
+      "feat: add feature\n\nThis is a longer description\nspanning several lines.\n\nCo-authored-by: Bob <bob@example.com>",
+    );
+    expect(parsed[0]!.metadata.coAuthoredBy).toHaveLength(1);
+    expect(parsed[0]!.metadata.coAuthoredBy[0]!.name).toBe("Bob");
+  });
+
+  it("does not let an unindented line inside a message be mistaken for a new commit header", () => {
+    const fakeSha = "b" + "0".repeat(39);
+    const commits = [
+      makeCommit(
+        1,
+        "Alice",
+        "2026-01-15T10:00:00Z",
+        `This reverts commit\ncommit ${fakeSha}\nwhich was faulty.`,
+      ),
+    ];
+
+    const gitLog = (ContributionMetricsService as any).convertToGitLogFormat(
+      commits,
+    );
+    const parsed = GitLogService.parseGitLog(gitLog);
+
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]!.sha).toBe(sha(1));
   });
 });

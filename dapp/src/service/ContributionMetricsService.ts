@@ -57,7 +57,16 @@ export class ContributionMetricsService {
       gitLog += `Commit: ${commit.author.name} <unknown@email>\n`;
       gitLog += `CommitDate: ${commit.commit_date}\n`;
       gitLog += `\n`;
-      gitLog += `    ${commit.message}\n`;
+      // GitLogService.parseCommitBlock only treats a line as part of the
+      // message body when it is indented 4 spaces (matching real `git log`
+      // output). Every line of a multi-line message must be indented here,
+      // not just the first, or continuation lines/trailers are silently
+      // dropped by the parser.
+      const indentedMessage = commit.message
+        .split("\n")
+        .map((line) => `    ${line}`)
+        .join("\n");
+      gitLog += `${indentedMessage}\n`;
       gitLog += `\n`;
     }
 

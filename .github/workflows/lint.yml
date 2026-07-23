@@ -99,6 +99,9 @@ jobs:
       - name: Lint dApp
         run: cd dapp && bun run lint
 
+      - name: Run dApp unit tests
+        run: cd dapp && bun run test:unit
+
       - name: Check dApp types
         run: cd dapp && bun run check
 
