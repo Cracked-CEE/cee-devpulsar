@@ -176,12 +176,12 @@ jobs:
       # Generate build provenance attestation via GitHub's Sigstore integration
       # -----------------------------------------------------------------------
       - name: Generate build provenance attestation (tansu)
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: target/wasm32v1-none/release/tansu.wasm
 
       - name: Generate build provenance attestation (scf-membership)
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: target/wasm32v1-none/release/scf_membership.wasm
 
