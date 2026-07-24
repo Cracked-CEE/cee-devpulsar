@@ -66,16 +66,20 @@ export class GitLogService {
 
       if (!line) continue;
 
-      if (line.startsWith("Author: ")) {
-        const authorMatch = line.match(/^Author: (.+) <(.+)>$/);
+      if (line.startsWith("Author:")) {
+        // Real `git log --format=fuller` output right-pads "Author:" with
+        // extra spaces to align with "AuthorDate:", so the separator must
+        // be matched as \s+ rather than a single literal space -- otherwise
+        // the padding leaks into the captured name.
+        const authorMatch = line.match(/^Author:\s+(.+) <(.+)>$/);
         if (authorMatch && authorMatch[1] && authorMatch[2]) {
           author.name = authorMatch[1];
           author.email = authorMatch[2];
         }
       } else if (line.startsWith("AuthorDate: ")) {
         author.date = line.substring("AuthorDate: ".length);
-      } else if (line.startsWith("Commit: ")) {
-        const committerMatch = line.match(/^Commit: (.+) <(.+)>$/);
+      } else if (line.startsWith("Commit:")) {
+        const committerMatch = line.match(/^Commit:\s+(.+) <(.+)>$/);
         if (committerMatch && committerMatch[1] && committerMatch[2]) {
           committer.name = committerMatch[1];
           committer.email = committerMatch[2];
