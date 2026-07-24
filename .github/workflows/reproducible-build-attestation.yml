@@ -218,7 +218,7 @@ jobs:
           EOF
 
       - name: Upload attestation bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: reproducible-build-attestation-${{ github.ref_name }}
           path: attestations/
@@ -301,7 +301,7 @@ jobs:
 
       - name: Upload extended SBOM
         if: steps.check-sbom.outputs.sbom_found == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-with-attestation-${{ github.ref_name }}
           path: sbom-with-attestation/
