@@ -5,7 +5,7 @@ contract/target
 **/test_snapshots
 .stellar/identity
 .stellar/network
-mutants*
+/mutants.out/
 
 # Misc
 .cursor

@@ -1,0 +1,97 @@
+name: Mutation Testing (contract_dao)
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/tansu/src/contract_dao.rs'
+      - 'contracts/tansu/src/tests/**'
+      - 'contracts/tansu/src/types.rs'
+      - 'contracts/tansu/src/errors.rs'
+      - 'contracts/tansu/src/events.rs'
+      - 'contracts/tansu/Cargo.toml'
+      - '.cargo/mutants.toml'
+      - '.github/workflows/mutation-testing.yml'
+      - '.github/workflows/parse_mutants.py'
+  push:
+    branches: [ main ]
+    paths:
+      - 'contracts/tansu/src/contract_dao.rs'
+      - 'contracts/tansu/src/tests/**'
+      - 'contracts/tansu/src/types.rs'
+      - 'contracts/tansu/src/errors.rs'
+      - 'contracts/tansu/src/events.rs'
+      - 'contracts/tansu/Cargo.toml'
+      - '.cargo/mutants.toml'
+      - '.github/workflows/mutation-testing.yml'
+      - '.github/workflows/parse_mutants.py'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  RUSTFLAGS: -C debuginfo=0 # Do not produce debug symbols to keep memory usage down
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Mutation testing rebuilds and re-runs the test suite once per injected
+  # mutant (145 mutants for contract_dao.rs today), so it is meaningfully
+  # slower than the regular test job and is kept in its own workflow so it
+  # never blocks `Test Contract`.
+  #
+  # This job is intentionally informational-only for now (continue-on-error):
+  # cargo-mutants is new to this repo, runtime cost on crypto-heavy code is
+  # high, and we don't yet have an agreed mutation-score floor to gate on.
+  # The mutation score is still fully CI-visible via the job summary and the
+  # uploaded report artifact. Once the score stabilizes, flip this to a hard
+  # gate (see contracts/tansu/MUTATION_TESTING.md).
+  mutation-testing:
+    name: cargo-mutants (contract_dao.rs)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7.0.0
+        with:
+          persist-credentials: false
+      - uses: stellar/actions/rust-cache@main
+
+      - run: rustup update
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants
+
+      - name: Run cargo-mutants against contract_dao.rs
+        id: mutants
+        run: |
+          set +e
+          cargo mutants --in-place --timeout-multiplier 3
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Summarize mutation score
+        if: always()
+        run: |
+          python3 .github/workflows/parse_mutants.py mutants.out/outcomes.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutants-report-contract-dao
+          path: mutants.out/
+          retention-days: 90
+
+      - name: Surface non-zero exit (informational)
+        if: always()
+        run: |
+          if [ "${{ steps.mutants.outputs.exit_code }}" != "0" ]; then
+            echo "::warning::cargo-mutants exited with code ${{ steps.mutants.outputs.exit_code }} (missed mutants and/or timeouts found). See job summary and the mutants-report-contract-dao artifact for details. This job is informational-only and does not fail the build."
+          fi
