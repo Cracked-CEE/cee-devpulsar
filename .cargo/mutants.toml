@@ -1,0 +1,20 @@
+# Configuration for cargo-mutants (https://mutants.rs/).
+#
+# Scoped initially to contract_dao.rs: it's the largest and highest-risk
+# module in the tansu contract (proposal lifecycle, vote-weight validation,
+# tally accumulation, anonymous-vote commitment verification). Line/branch
+# coverage there doesn't prove the test suite would catch a subtly wrong
+# implementation (e.g. an off-by-one in tally accumulation, or a flipped
+# comparison in vote-weight validation) -- mutation testing measures that
+# directly. See contracts/tansu/MUTATION_TESTING.md for the baseline results
+# and rationale.
+#
+# Widen this (or drop it and pass --file explicitly) once CI runtime budget
+# allows whole-crate mutation testing.
+examine_globs = ["contracts/tansu/src/contract_dao.rs"]
+
+# The BLS12-381 crypto operations exercised by the anonymous-voting tests
+# make cold build/test cycles slower than cargo-mutants' default timeout
+# heuristic assumes; give extra headroom so slow-but-passing test runs are
+# not misclassified as (uninteresting) timeouts.
+minimum_test_timeout = 60

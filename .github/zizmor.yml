@@ -10,3 +10,7 @@ rules:
       # The stellar/actions/rust-cache action is from Stellar's official org and
       # does not publish SHA-pinned tags
       - "stellar/actions/rust-cache@*"
+      # taiki-e/install-action is a widely-used, actively maintained action for
+      # fetching prebuilt CLI tool binaries (used here for cargo-mutants); its
+      # major-version tag is the install method documented upstream
+      - "taiki-e/install-action@*"
