@@ -64,6 +64,9 @@ dev = [
     "ruff",
 ]
 
+[project.scripts]
+tansu-backfill = "tansu.events.backfill:main"
+
 [project.urls]
 homepage = "https://github.com/Consulting-Manao/tansu"
 documentation = "https://github.com/Consulting-Manao/tansu"
