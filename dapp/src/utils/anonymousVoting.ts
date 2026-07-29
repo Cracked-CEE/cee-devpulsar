@@ -7,7 +7,7 @@
 import { deriveProjectKey } from "./projectKey";
 import type { VoteStatus } from "types/proposal";
 import { VoteType } from "types/proposal";
-import { decryptWithPrivateKey } from "utils/crypto";
+import { verifyAndDecryptVote } from "utils/crypto";
 import { parseContractError } from "utils/contractErrors";
 import {
   accumulateAnonymousTally,
@@ -184,15 +184,18 @@ export async function computeAnonymousVotingData(
 
       // Decrypt (or parse plain numbers for default votes). Decoding is shared
       // with the tally kernel via decodeAnonymousValue.
+      // Signed envelopes are authenticated against memberAddr before decrypt.
+      // Legacy raw ciphertexts remain supported for already-cast votes.
+      // Signature failures throw VoteCiphertextAuthError (never swallowed).
       const vDec = decodeAnonymousValue(
         isPlainNumber(vCipher)
           ? vCipher
-          : await decryptWithPrivateKey(vCipher, privateKey),
+          : await verifyAndDecryptVote(vCipher, privateKey, memberAddr),
       );
       const sDec = decodeAnonymousValue(
         isPlainNumber(sCipher)
           ? sCipher
-          : await decryptWithPrivateKey(sCipher, privateKey),
+          : await verifyAndDecryptVote(sCipher, privateKey, memberAddr),
       );
 
       // Store all outcome weights and seeds
