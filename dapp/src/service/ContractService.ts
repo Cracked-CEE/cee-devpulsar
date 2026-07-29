@@ -16,7 +16,10 @@ import {
 import { handleFreighterError } from "../utils/errorHandler";
 import type { VoteType } from "types/proposal";
 import { signAndSend } from "./TxService";
-import { encryptWithPublicKey } from "../utils/crypto";
+import {
+  encryptSignAndPackVote,
+  generateVoterSigningKeyPair,
+} from "../utils/crypto";
 import { invalidateProposalCache } from "./ReadContractService";
 import {
   getTokenBalance,
@@ -291,15 +294,31 @@ export async function voteToProposal(
       const votesU128 = votesArr.map(BigInt);
       const seedsU128 = seedsArr.map(BigInt);
 
+      // Bind each ciphertext to this voter via ECDSA so reveal can detect
+      // tampering before decrypt (see docs/anonymous-vote-ciphertext-threat-model.md).
+      const voterSigning = await generateVoterSigningKeyPair();
+
       [encryptedSeeds, encryptedVotes, commitmentsTx] = await Promise.all([
         Promise.all(
           seedsArr.map((s) =>
-            encryptWithPublicKey(`${saltPrefix}:${s}`, publicKeyStr),
+            encryptSignAndPackVote(
+              `${saltPrefix}:${s}`,
+              publicKeyStr,
+              maintainer,
+              voterSigning.privateKey,
+              voterSigning.publicKey,
+            ),
           ),
         ),
         Promise.all(
           votesArr.map((v) =>
-            encryptWithPublicKey(`${saltPrefix}:${v}`, publicKeyStr),
+            encryptSignAndPackVote(
+              `${saltPrefix}:${v}`,
+              publicKeyStr,
+              maintainer,
+              voterSigning.privateKey,
+              voterSigning.publicKey,
+            ),
           ),
         ),
         client.build_commitments_from_votes({
