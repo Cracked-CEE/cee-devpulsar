@@ -64,7 +64,7 @@ jobs:
       - run: rustup update
 
       - name: Install cargo-mutants
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.85.0
         with:
           tool: cargo-mutants
 
