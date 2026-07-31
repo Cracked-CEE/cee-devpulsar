@@ -257,7 +257,7 @@ jobs:
           persist-credentials: false
 
       - name: Download attestation bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: reproducible-build-attestation-${{ github.ref_name }}
           path: attestations/
